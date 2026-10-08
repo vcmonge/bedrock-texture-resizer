@@ -4,6 +4,9 @@ package util;
  * Modos de procesamiento del canal alfa durante el redimensionamiento.
  * 
  * <ul>
+ *   <li>{@link #ADAPTIVE} — Decide por píxel: umbral binario donde la zona
+ *       fuente es un recorte duro (solo alfa 0 o 255) y alfa continuo donde
+ *       hay opacidad parcial real. Sirve para cualquier textura.</li>
  *   <li>{@link #BINARY} — Umbral binario: alfa ≥ 0.5 → 255 (opaco),
  *       alfa &lt; 0.5 → 0 (transparente). Ideal para texturas con
  *       transparencia de recorte (hojas, flores, etc.).</li>
@@ -17,10 +20,18 @@ package util;
 public enum AlphaMode {
     
     /**
+     * Alfa adaptativo: cada píxel destino cuyos píxeles fuente tienen todos
+     * alfa 0 o 255 se resuelve con el umbral de {@link #BINARY}, y el resto con
+     * {@link #CONTINUOUS}. Mantiene nítidos los bordes de recorte sin perder la
+     * translucidez de hielo, agua o vidrio tintado.
+     */
+    ADAPTIVE("Adaptive (Default Mode)"),
+    
+    /**
      * Alfa binario: cada píxel resultante es 100 % opaco o 100 % transparente.
      * Comportamiento original del algoritmo.
      */
-    BINARY("Binary (Default Mode)"),
+    BINARY("Binary (hard cut-out)"),
     
     /**
      * Alfa continuo: preserva los valores intermedios de transparencia.

@@ -17,11 +17,19 @@ import util.AlphaMode;
  * Usa alfa premultiplicado para mezclar correctamente píxeles con diferente
  * nivel de transparencia, evitando halos oscuros en bordes semitransparentes.
  *
- * Soporta dos modos de procesamiento del canal alfa:
+ * Soporta tres modos de procesamiento del canal alfa:
+ * - {@link AlphaMode#ADAPTIVE}: umbral binario donde todos los píxeles fuente
+ *   del píxel destino tienen alfa 0 o 255 (borde de recorte) y alfa continuo
+ *   donde alguno tiene opacidad parcial.
  * - {@link AlphaMode#BINARY}: umbral binario (≥ 0.5 → opaco, &lt; 0.5 → transparente),
  *   ideal para texturas con transparencia de recorte.
  * - {@link AlphaMode#CONTINUOUS}: preserva el valor real del alfa, ideal para
  *   texturas con opacidad parcial (hielo, agua, cristal).
+ *
+ * Los píxeles destino con alfa 0 no se rellenan de negro: guardan el color de
+ * los píxeles visibles de su zona o, si toda la zona es transparente, el RGB
+ * que la fuente guardaba en ella. Así los mipmaps y el filtrado del motor no
+ * oscurecen los bordes.
  *
  * Detalles de implementación:
  * - El filtro de caja es separable: los pesos de cada eje se precalculan una
@@ -115,6 +123,8 @@ public final class AreaResampler {
      *   <li>sumC = Σ w·a·c (premultiplicado) o Σ w·c (independiente)</li>
      * </ul>
      * La suma de pesos de un píxel destino es siempre {@code srcWidth × srcHeight}.
+     * En modo {@link AlphaMode#ADAPTIVE} se cuenta además cuántos píxeles fuente
+     * tienen alfa parcial (ni 0 ni 255) para decidir si se aplica el umbral.
      */
     private static BufferedImage resample(BufferedImage source, int dstWidth, int dstHeight,
             boolean premultiply, AlphaMode alphaMode) {
@@ -140,6 +150,7 @@ public final class AreaResampler {
         double invTotalWeight = 1.0 / totalWeight;
         long alphaThreshold = 255L * totalWeight;
         boolean continuous = alphaMode == AlphaMode.CONTINUOUS;
+        boolean adaptive = alphaMode == AlphaMode.ADAPTIVE;
 
         // Fila fuente reducida horizontalmente (se reutiliza si la siguiente
         // fila destino empieza en la misma fila fuente)
@@ -147,12 +158,14 @@ public final class AreaResampler {
         long[] rowR = new long[dstWidth];
         long[] rowG = new long[dstWidth];
         long[] rowB = new long[dstWidth];
+        long[] rowSoft = adaptive ? new long[dstWidth] : null;
         int cachedRow = -1;
 
         long[] accA = new long[dstWidth];
         long[] accR = new long[dstWidth];
         long[] accG = new long[dstWidth];
         long[] accB = new long[dstWidth];
+        long[] accSoft = adaptive ? new long[dstWidth] : null;
 
         int[] dstPixels = new int[dstWidth * dstHeight];
 
@@ -161,6 +174,9 @@ public final class AreaResampler {
             Arrays.fill(accR, 0L);
             Arrays.fill(accG, 0L);
             Arrays.fill(accB, 0L);
+            if (adaptive) {
+                Arrays.fill(accSoft, 0L);
+            }
 
             for (int k = yWeights.offsets[dy]; k < yWeights.offsets[dy + 1]; k++) {
                 int sy = yWeights.indices[k];
@@ -168,7 +184,7 @@ public final class AreaResampler {
 
                 if (sy != cachedRow) {
                     reduceRow(srcPixels, sy * srcWidth, xWeights, premultiply,
-                            rowA, rowR, rowG, rowB);
+                            rowA, rowR, rowG, rowB, rowSoft);
                     cachedRow = sy;
                 }
 
@@ -178,38 +194,36 @@ public final class AreaResampler {
                     accG[dx] += wy * rowG[dx];
                     accB[dx] += wy * rowB[dx];
                 }
+                if (adaptive) {
+                    for (int dx = 0; dx < dstWidth; dx++) {
+                        accSoft[dx] += rowSoft[dx];
+                    }
+                }
             }
 
             int rowOffset = dy * dstWidth;
             for (int dx = 0; dx < dstWidth; dx++) {
                 long sumA = accA[dx];
-                boolean opaque = 2 * sumA >= alphaThreshold;
-                int finalA, finalR, finalG, finalB;
+                // ADAPTIVE: umbral solo si ningún píxel fuente tiene alfa parcial
+                boolean threshold = !continuous && (!adaptive || accSoft[dx] == 0);
+                int finalA = threshold
+                        ? (2 * sumA >= alphaThreshold ? 255 : 0)
+                        : divRound(sumA, totalWeight, invTotalWeight);
+                int rgb;
 
-                if (premultiply) {
-                    if (sumA == 0 || (!continuous && !opaque)) {
-                        finalA = 0;
-                        finalR = 0;
-                        finalG = 0;
-                        finalB = 0;
-                    } else {
-                        double invSumA = 1.0 / sumA;
-                        finalA = continuous ? divRound(sumA, totalWeight, invTotalWeight) : 255;
-                        finalR = divRound(accR[dx], sumA, invSumA);
-                        finalG = divRound(accG[dx], sumA, invSumA);
-                        finalB = divRound(accB[dx], sumA, invSumA);
-                    }
+                if (!premultiply) {
+                    rgb = packRgb(accR[dx], accG[dx], accB[dx], totalWeight, invTotalWeight);
+                } else if (sumA != 0) {
+                    // Si el umbral deja el píxel transparente, conserva igualmente
+                    // el color de sus píxeles visibles en lugar de negro
+                    rgb = packRgb(accR[dx], accG[dx], accB[dx], sumA, 1.0 / sumA);
                 } else {
-                    finalA = continuous
-                            ? divRound(sumA, totalWeight, invTotalWeight)
-                            : (opaque ? 255 : 0);
-                    finalR = divRound(accR[dx], totalWeight, invTotalWeight);
-                    finalG = divRound(accG[dx], totalWeight, invTotalWeight);
-                    finalB = divRound(accB[dx], totalWeight, invTotalWeight);
+                    // Zona totalmente transparente: conserva el RGB que guardaba la fuente
+                    rgb = averageHiddenRgb(srcPixels, srcWidth, xWeights, yWeights, dx, dy,
+                            totalWeight, invTotalWeight);
                 }
 
-                dstPixels[rowOffset + dx] =
-                        (finalA << 24) | (finalR << 16) | (finalG << 8) | finalB;
+                dstPixels[rowOffset + dx] = (finalA << 24) | rgb;
             }
         }
 
@@ -221,15 +235,20 @@ public final class AreaResampler {
 
     /**
      * Reduce horizontalmente una fila fuente a {@code dstWidth} columnas.
+     * Si {@code rowSoft} no es null, guarda en él cuántos píxeles fuente de
+     * cada columna destino tienen alfa parcial.
      */
     private static void reduceRow(int[] srcPixels, int rowStart, AxisWeights xWeights,
-            boolean premultiply, long[] rowA, long[] rowR, long[] rowG, long[] rowB) {
+            boolean premultiply, long[] rowA, long[] rowR, long[] rowG, long[] rowB,
+            long[] rowSoft) {
         int[] offsets = xWeights.offsets;
         int[] indices = xWeights.indices;
         int[] weights = xWeights.weights;
+        boolean countSoft = rowSoft != null;
 
         for (int dx = 0; dx < rowA.length; dx++) {
             long sumA = 0, sumR = 0, sumG = 0, sumB = 0;
+            int soft = 0;
 
             for (int k = offsets[dx]; k < offsets[dx + 1]; k++) {
                 int argb = srcPixels[rowStart + indices[k]];
@@ -237,6 +256,9 @@ public final class AreaResampler {
                 int r = (argb >> 16) & 0xFF;
                 int g = (argb >> 8) & 0xFF;
                 int b = argb & 0xFF;
+                if (countSoft && a != 0 && a != 255) {
+                    soft++;
+                }
                 if (premultiply) {
                     r *= a;
                     g *= a;
@@ -254,7 +276,41 @@ public final class AreaResampler {
             rowR[dx] = sumR;
             rowG[dx] = sumG;
             rowB[dx] = sumB;
+            if (countSoft) {
+                rowSoft[dx] = soft;
+            }
         }
+    }
+
+    /**
+     * Promedio por área del RGB sin ponderar por alfa de los píxeles fuente del
+     * píxel destino ({@code dx}, {@code dy}). Solo se usa cuando todos tienen
+     * alfa 0, así que el bucle separable no lo acumula.
+     */
+    private static int averageHiddenRgb(int[] srcPixels, int srcWidth, AxisWeights xWeights,
+            AxisWeights yWeights, int dx, int dy, long totalWeight, double invTotalWeight) {
+        long sumR = 0, sumG = 0, sumB = 0;
+        for (int ky = yWeights.offsets[dy]; ky < yWeights.offsets[dy + 1]; ky++) {
+            int rowStart = yWeights.indices[ky] * srcWidth;
+            long wy = yWeights.weights[ky];
+            for (int kx = xWeights.offsets[dx]; kx < xWeights.offsets[dx + 1]; kx++) {
+                int argb = srcPixels[rowStart + xWeights.indices[kx]];
+                long w = wy * xWeights.weights[kx];
+                sumR += w * ((argb >> 16) & 0xFF);
+                sumG += w * ((argb >> 8) & 0xFF);
+                sumB += w * (argb & 0xFF);
+            }
+        }
+        return packRgb(sumR, sumG, sumB, totalWeight, invTotalWeight);
+    }
+
+    /**
+     * Empaqueta {@code round(sum / den)} de cada canal como RGB de 24 bits.
+     */
+    private static int packRgb(long sumR, long sumG, long sumB, long den, double invDen) {
+        return (divRound(sumR, den, invDen) << 16)
+                | (divRound(sumG, den, invDen) << 8)
+                | divRound(sumB, den, invDen);
     }
 
     /**

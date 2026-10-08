@@ -36,7 +36,7 @@ public class ImageProcessor {
     /** Si true, los TGA se procesan con RGB y Alpha como canales independientes */
     private final boolean tgaIndependentAlpha;
     
-    /** Modo de procesamiento del canal alfa (binario o continuo) */
+    /** Modo de procesamiento del canal alfa (adaptativo, binario o continuo) */
     private final AlphaMode alphaMode;
     
     // ==================== CONSTRUCTORES ====================
@@ -69,14 +69,14 @@ public class ImageProcessor {
     
     /**
      * Crea un procesador con configuración completa y control de TGA.
-     * Usa alfa binario por defecto.
+     * Usa el modo de alfa por defecto ({@link Constants#DEFAULT_ALPHA_MODE}).
      * 
      * @param scaleFactor Factor de división de resolución
      * @param algorithm Algoritmo de redimensionamiento a usar
      * @param tgaIndependentAlpha Si true, los TGA se procesan con canales RGB y Alpha independientes
      */
     public ImageProcessor(int scaleFactor, ResizeAlgorithm algorithm, boolean tgaIndependentAlpha) {
-        this(scaleFactor, algorithm, tgaIndependentAlpha, AlphaMode.BINARY);
+        this(scaleFactor, algorithm, tgaIndependentAlpha, Constants.DEFAULT_ALPHA_MODE);
     }
     
     /**
@@ -85,7 +85,7 @@ public class ImageProcessor {
      * @param scaleFactor Factor de división de resolución
      * @param algorithm Algoritmo de redimensionamiento a usar
      * @param tgaIndependentAlpha Si true, los TGA se procesan con canales RGB y Alpha independientes
-     * @param alphaMode Modo de procesamiento del canal alfa (binario o continuo)
+     * @param alphaMode Modo de procesamiento del canal alfa (adaptativo, binario o continuo)
      */
     public ImageProcessor(int scaleFactor, ResizeAlgorithm algorithm, 
             boolean tgaIndependentAlpha, AlphaMode alphaMode) {

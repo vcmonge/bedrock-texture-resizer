@@ -34,12 +34,12 @@ public final class Constants {
     
     /**
      * Modo de alfa por defecto para el redimensionamiento de PNG.
-     * {@code true} = alfa binario (opaco/transparente),
-     * {@code false} = alfa continuo (preserva opacidad parcial).
+     * {@link AlphaMode#ADAPTIVE} aplica el umbral binario en los bordes de
+     * recorte y conserva la opacidad parcial donde la textura la tiene.
      * 
      * @see AlphaMode
      */
-    public static final AlphaMode DEFAULT_ALPHA_MODE = AlphaMode.BINARY;
+    public static final AlphaMode DEFAULT_ALPHA_MODE = AlphaMode.ADAPTIVE;
     
     // ==================== RUTAS DE TEXTURAS ====================
     
