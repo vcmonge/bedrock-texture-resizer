@@ -162,6 +162,24 @@ public class ImageProcessor {
      * @throws IOException Si hay error de lectura/escritura
      */
     public void processFile(File inputFile, File outputFile) throws IOException {
+        processFile(inputFile, outputFile, false);
+    }
+    
+    /**
+     * Procesa un mapa de datos asociado (MER/MERS o normal) sobrescribiendo el original.
+     * 
+     * Sus canales son datos, no color + transparencia (en un {@code _mers} el alfa
+     * es subsurface), así que los cuatro canales se promedian de forma independiente
+     * y con alfa continuo, sin importar el modo de alfa elegido para las texturas.
+     * 
+     * @param file Mapa a procesar
+     * @throws IOException Si hay error de lectura/escritura
+     */
+    public void processDataMap(File file) throws IOException {
+        processFile(file, file, true);
+    }
+    
+    private void processFile(File inputFile, File outputFile, boolean dataMap) throws IOException {
         if (!inputFile.exists()) {
             throw new IOException("El archivo no existe: " + inputFile.getAbsolutePath());
         }
@@ -180,7 +198,11 @@ public class ImageProcessor {
         }
         
         BufferedImage resized;
-        if (extension.equals(Constants.TGA_EXTENSION) && algorithm == ResizeAlgorithm.AREA && tgaIndependentAlpha) {
+        if (dataMap && algorithm == ResizeAlgorithm.AREA) {
+            int[] dims = calculateNewDimensions(original.getWidth(), original.getHeight());
+            resized = AreaResampler.resizeIndependentAlpha(original, dims[0], dims[1],
+                    AlphaMode.CONTINUOUS);
+        } else if (extension.equals(Constants.TGA_EXTENSION) && algorithm == ResizeAlgorithm.AREA && tgaIndependentAlpha) {
             int[] dims = calculateNewDimensions(original.getWidth(), original.getHeight());
             resized = AreaResampler.resizeIndependentAlpha(original, dims[0], dims[1]);
         } else {

@@ -24,7 +24,7 @@ page. It only requires **Java 25** — JavaFX is already bundled inside.
 |---------|---------|
 | **Supported Formats** | PNG and TGA (including alpha channel) |
 | **Scanned Paths** | `textures/blocks`, `textures/items`, `textures/environment`, `textures/entity` |
-| **Related Textures** | Automatically detects and resizes companion `_mer`, `_mers`, `_normal`, and `_n` maps alongside the base texture |
+| **Related Textures** | Automatically detects and resizes companion `_mer`, `_mers`, `_normal`, and `_n` maps alongside the base texture. These maps hold data rather than color, so every channel (including alpha, e.g. subsurface in `_mers`) is averaged independently, regardless of the selected alpha mode |
 | **Default Algorithm** | *Area Resampling* (pixel-area relation) — produces cleaner results on semi-transparent edges than naive downscaling |
 | **Alpha Mode** | Choose how the alpha (transparency) channel is handled during resize: **Binary** (default) forces each pixel to be fully opaque or fully transparent — ideal for cut-out textures like leaves and flowers. **Continuous** preserves the real alpha values — ideal for textures with partial opacity such as ice, water, stained glass, or any semi-transparent surface |
 | **TGA Handling** | RGB and alpha channels are processed independently (fixed behavior, suited for most resource-pack TGAs) |

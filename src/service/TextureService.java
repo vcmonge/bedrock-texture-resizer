@@ -558,12 +558,12 @@ public class TextureService {
         
         // Procesar todas las variantes MER asociadas
         for (File merFile : textureInfo.getMerFiles()) {
-            imageProcessor.processFile(merFile);
+            imageProcessor.processDataMap(merFile);
         }
         
         // Procesar todas las variantes de normales asociadas
         for (File normalFile : textureInfo.getNormalFiles()) {
-            imageProcessor.processFile(normalFile);
+            imageProcessor.processDataMap(normalFile);
         }
         
         // Marcar como procesada

@@ -1,22 +1,37 @@
 package service;
 
+import java.awt.color.ColorSpace;
 import java.awt.image.BufferedImage;
+import java.awt.image.ColorModel;
+import java.awt.image.ComponentColorModel;
+import java.awt.image.DataBuffer;
+import java.awt.image.Raster;
+import java.util.Arrays;
 import util.AlphaMode;
 
 /**
  * Implementación del algoritmo Area Resampling (Pixel Area Relation) para
  * reducción de imágenes. Cada píxel se trata como un área 1×1 y se calcula
  * la intersección exacta con los píxeles fuente.
- * 
+ *
  * Usa alfa premultiplicado para mezclar correctamente píxeles con diferente
  * nivel de transparencia, evitando halos oscuros en bordes semitransparentes.
- * 
+ *
  * Soporta dos modos de procesamiento del canal alfa:
  * - {@link AlphaMode#BINARY}: umbral binario (≥ 0.5 → opaco, &lt; 0.5 → transparente),
  *   ideal para texturas con transparencia de recorte.
  * - {@link AlphaMode#CONTINUOUS}: preserva el valor real del alfa, ideal para
  *   texturas con opacidad parcial (hielo, agua, cristal).
- * 
+ *
+ * Detalles de implementación:
+ * - El filtro de caja es separable: los pesos de cada eje se precalculan una
+ *   sola vez y cada fila fuente se reduce horizontalmente antes de acumularse
+ *   en vertical.
+ * - Los pesos son enteros exactos (solapes medidos en unidades de
+ *   1 / (ancho fuente × ancho destino)) y las sumas se hacen con {@code long},
+ *   por lo que el redondeo y el umbral de alfa no dependen de errores de coma
+ *   flotante.
+ *
  * @author vmonge
  */
 public final class AreaResampler {
@@ -49,120 +64,7 @@ public final class AreaResampler {
      */
     public static BufferedImage resize(BufferedImage source, int dstWidth, int dstHeight,
             AlphaMode alphaMode) {
-        if (source == null) {
-            throw new IllegalArgumentException("La imagen fuente no puede ser null");
-        }
-        if (dstWidth < 1 || dstHeight < 1) {
-            throw new IllegalArgumentException("Las dimensiones destino deben ser >= 1");
-        }
-
-        int srcWidth = source.getWidth();
-        int srcHeight = source.getHeight();
-
-        double scaleX = (double) srcWidth / dstWidth;
-        double scaleY = (double) srcHeight / dstHeight;
-
-        int[] srcPixels = source.getRGB(0, 0, srcWidth, srcHeight, null, 0, srcWidth);
-
-        BufferedImage dest = new BufferedImage(dstWidth, dstHeight, BufferedImage.TYPE_INT_ARGB);
-        int[] dstPixels = new int[dstWidth * dstHeight];
-
-        for (int dy = 0; dy < dstHeight; dy++) {
-            double y0 = dy * scaleY;
-            double y1 = (dy + 1) * scaleY;
-
-            int syStart = (int) y0;
-            int syEnd = Math.min((int) y1, srcHeight - 1);
-            if (y1 == (int) y1 && syEnd > syStart) {
-                syEnd = (int) y1 - 1;
-            }
-
-            for (int dx = 0; dx < dstWidth; dx++) {
-                double x0 = dx * scaleX;
-                double x1 = (dx + 1) * scaleX;
-
-                int sxStart = (int) x0;
-                int sxEnd = Math.min((int) x1, srcWidth - 1);
-                if (x1 == (int) x1 && sxEnd > sxStart) {
-                    sxEnd = (int) x1 - 1;
-                }
-
-                double sumR = 0.0, sumG = 0.0, sumB = 0.0, sumA = 0.0;
-                double sumArea = 0.0;
-
-                for (int sy = syStart; sy <= syEnd; sy++) {
-                    double iy0 = Math.max(y0, sy);
-                    double iy1 = Math.min(y1, sy + 1);
-                    double hOverlap = iy1 - iy0;
-                    if (hOverlap <= 0.0) continue;
-
-                    int rowOffset = sy * srcWidth;
-
-                    for (int sx = sxStart; sx <= sxEnd; sx++) {
-                        double ix0 = Math.max(x0, sx);
-                        double ix1 = Math.min(x1, sx + 1);
-                        double wOverlap = ix1 - ix0;
-                        if (wOverlap <= 0.0) continue;
-
-                        double area = wOverlap * hOverlap;
-
-                        int argb = srcPixels[rowOffset + sx];
-                        double a = ((argb >> 24) & 0xFF) / 255.0;
-                        double r = ((argb >> 16) & 0xFF) / 255.0;
-                        double g = ((argb >> 8) & 0xFF) / 255.0;
-                        double b = (argb & 0xFF) / 255.0;
-
-                        double rp = r * a;
-                        double gp = g * a;
-                        double bp = b * a;
-
-                        sumR += rp * area;
-                        sumG += gp * area;
-                        sumB += bp * area;
-                        sumA += a * area;
-                        sumArea += area;
-                    }
-                }
-
-                int finalA, finalR, finalG, finalB;
-
-                if (sumArea == 0.0 || sumA == 0.0) {
-                    finalA = 0;
-                    finalR = 0;
-                    finalG = 0;
-                    finalB = 0;
-                } else {
-                    double aOut = sumA / sumArea;
-
-                    if (alphaMode == AlphaMode.CONTINUOUS) {
-                        // Alfa continuo: preservar el valor real
-                        finalA = clamp255(aOut);
-                        finalR = clamp255(sumR / sumA);
-                        finalG = clamp255(sumG / sumA);
-                        finalB = clamp255(sumB / sumA);
-                    } else {
-                        // Alfa binario: umbral ≥ 0.5 → opaco, < 0.5 → transparente
-                        if (aOut >= 0.5) {
-                            finalA = 255;
-                            finalR = clamp255(sumR / sumA);
-                            finalG = clamp255(sumG / sumA);
-                            finalB = clamp255(sumB / sumA);
-                        } else {
-                            finalA = 0;
-                            finalR = 0;
-                            finalG = 0;
-                            finalB = 0;
-                        }
-                    }
-                }
-
-                dstPixels[dy * dstWidth + dx] =
-                        (finalA << 24) | (finalR << 16) | (finalG << 8) | finalB;
-            }
-        }
-
-        dest.setRGB(0, 0, dstWidth, dstHeight, dstPixels, 0, dstWidth);
-        return dest;
+        return resample(source, dstWidth, dstHeight, true, alphaMode);
     }
 
     /**
@@ -182,104 +84,330 @@ public final class AreaResampler {
      */
     public static BufferedImage resizeIndependentAlpha(BufferedImage source,
             int dstWidth, int dstHeight) {
+        return resizeIndependentAlpha(source, dstWidth, dstHeight, AlphaMode.BINARY);
+    }
+
+    /**
+     * Redimensiona tratando RGB y Alpha como canales independientes, con el
+     * modo de alfa indicado. Con {@link AlphaMode#CONTINUOUS} los cuatro canales
+     * se promedian por separado, que es lo correcto para mapas de datos
+     * (MER/MERS, normales) cuyo alfa no representa transparencia.
+     *
+     * @param source    Imagen fuente
+     * @param dstWidth  Ancho destino (debe ser &gt; 0)
+     * @param dstHeight Alto destino (debe ser &gt; 0)
+     * @param alphaMode Modo de procesamiento del canal alfa
+     * @return Nueva BufferedImage en TYPE_INT_ARGB
+     */
+    public static BufferedImage resizeIndependentAlpha(BufferedImage source,
+            int dstWidth, int dstHeight, AlphaMode alphaMode) {
+        return resample(source, dstWidth, dstHeight, false, alphaMode);
+    }
+
+    // ==================== NÚCLEO ====================
+
+    /**
+     * Filtro de caja separable con pesos enteros exactos.
+     *
+     * Para cada píxel destino, con {@code w} = solape (entero) y canales en 0–255:
+     * <ul>
+     *   <li>sumA = Σ w·a</li>
+     *   <li>sumC = Σ w·a·c (premultiplicado) o Σ w·c (independiente)</li>
+     * </ul>
+     * La suma de pesos de un píxel destino es siempre {@code srcWidth × srcHeight}.
+     */
+    private static BufferedImage resample(BufferedImage source, int dstWidth, int dstHeight,
+            boolean premultiply, AlphaMode alphaMode) {
         if (source == null) {
             throw new IllegalArgumentException("La imagen fuente no puede ser null");
         }
         if (dstWidth < 1 || dstHeight < 1) {
             throw new IllegalArgumentException("Las dimensiones destino deben ser >= 1");
         }
+        if (alphaMode == null) {
+            throw new IllegalArgumentException("El modo de alfa no puede ser null");
+        }
 
         int srcWidth = source.getWidth();
         int srcHeight = source.getHeight();
 
-        double scaleX = (double) srcWidth / dstWidth;
-        double scaleY = (double) srcHeight / dstHeight;
+        int[] srcPixels = readArgb(source);
 
-        int[] srcPixels = source.getRGB(0, 0, srcWidth, srcHeight, null, 0, srcWidth);
+        AxisWeights xWeights = new AxisWeights(srcWidth, dstWidth);
+        AxisWeights yWeights = new AxisWeights(srcHeight, dstHeight);
 
-        BufferedImage dest = new BufferedImage(dstWidth, dstHeight, BufferedImage.TYPE_INT_ARGB);
+        long totalWeight = (long) srcWidth * srcHeight;
+        double invTotalWeight = 1.0 / totalWeight;
+        long alphaThreshold = 255L * totalWeight;
+        boolean continuous = alphaMode == AlphaMode.CONTINUOUS;
+
+        // Fila fuente reducida horizontalmente (se reutiliza si la siguiente
+        // fila destino empieza en la misma fila fuente)
+        long[] rowA = new long[dstWidth];
+        long[] rowR = new long[dstWidth];
+        long[] rowG = new long[dstWidth];
+        long[] rowB = new long[dstWidth];
+        int cachedRow = -1;
+
+        long[] accA = new long[dstWidth];
+        long[] accR = new long[dstWidth];
+        long[] accG = new long[dstWidth];
+        long[] accB = new long[dstWidth];
+
         int[] dstPixels = new int[dstWidth * dstHeight];
 
         for (int dy = 0; dy < dstHeight; dy++) {
-            double y0 = dy * scaleY;
-            double y1 = (dy + 1) * scaleY;
+            Arrays.fill(accA, 0L);
+            Arrays.fill(accR, 0L);
+            Arrays.fill(accG, 0L);
+            Arrays.fill(accB, 0L);
 
-            int syStart = (int) y0;
-            int syEnd = Math.min((int) y1, srcHeight - 1);
-            if (y1 == (int) y1 && syEnd > syStart) {
-                syEnd = (int) y1 - 1;
+            for (int k = yWeights.offsets[dy]; k < yWeights.offsets[dy + 1]; k++) {
+                int sy = yWeights.indices[k];
+                long wy = yWeights.weights[k];
+
+                if (sy != cachedRow) {
+                    reduceRow(srcPixels, sy * srcWidth, xWeights, premultiply,
+                            rowA, rowR, rowG, rowB);
+                    cachedRow = sy;
+                }
+
+                for (int dx = 0; dx < dstWidth; dx++) {
+                    accA[dx] += wy * rowA[dx];
+                    accR[dx] += wy * rowR[dx];
+                    accG[dx] += wy * rowG[dx];
+                    accB[dx] += wy * rowB[dx];
+                }
             }
 
+            int rowOffset = dy * dstWidth;
             for (int dx = 0; dx < dstWidth; dx++) {
-                double x0 = dx * scaleX;
-                double x1 = (dx + 1) * scaleX;
-
-                int sxStart = (int) x0;
-                int sxEnd = Math.min((int) x1, srcWidth - 1);
-                if (x1 == (int) x1 && sxEnd > sxStart) {
-                    sxEnd = (int) x1 - 1;
-                }
-
-                double sumR = 0.0, sumG = 0.0, sumB = 0.0, sumA = 0.0;
-                double sumArea = 0.0;
-
-                for (int sy = syStart; sy <= syEnd; sy++) {
-                    double iy0 = Math.max(y0, sy);
-                    double iy1 = Math.min(y1, sy + 1);
-                    double hOverlap = iy1 - iy0;
-                    if (hOverlap <= 0.0) continue;
-
-                    int rowOffset = sy * srcWidth;
-
-                    for (int sx = sxStart; sx <= sxEnd; sx++) {
-                        double ix0 = Math.max(x0, sx);
-                        double ix1 = Math.min(x1, sx + 1);
-                        double wOverlap = ix1 - ix0;
-                        if (wOverlap <= 0.0) continue;
-
-                        double area = wOverlap * hOverlap;
-
-                        int argb = srcPixels[rowOffset + sx];
-                        double a = ((argb >> 24) & 0xFF) / 255.0;
-                        double r = ((argb >> 16) & 0xFF) / 255.0;
-                        double g = ((argb >> 8) & 0xFF) / 255.0;
-                        double b = (argb & 0xFF) / 255.0;
-
-                        sumR += r * area;
-                        sumG += g * area;
-                        sumB += b * area;
-                        sumA += a * area;
-                        sumArea += area;
-                    }
-                }
-
+                long sumA = accA[dx];
+                boolean opaque = 2 * sumA >= alphaThreshold;
                 int finalA, finalR, finalG, finalB;
 
-                if (sumArea == 0.0) {
-                    finalA = 0;
-                    finalR = 0;
-                    finalG = 0;
-                    finalB = 0;
+                if (premultiply) {
+                    if (sumA == 0 || (!continuous && !opaque)) {
+                        finalA = 0;
+                        finalR = 0;
+                        finalG = 0;
+                        finalB = 0;
+                    } else {
+                        double invSumA = 1.0 / sumA;
+                        finalA = continuous ? divRound(sumA, totalWeight, invTotalWeight) : 255;
+                        finalR = divRound(accR[dx], sumA, invSumA);
+                        finalG = divRound(accG[dx], sumA, invSumA);
+                        finalB = divRound(accB[dx], sumA, invSumA);
+                    }
                 } else {
-                    finalR = clamp255(sumR / sumArea);
-                    finalG = clamp255(sumG / sumArea);
-                    finalB = clamp255(sumB / sumArea);
-
-                    double aOut = sumA / sumArea;
-                    finalA = (aOut >= 0.5) ? 255 : 0;
+                    finalA = continuous
+                            ? divRound(sumA, totalWeight, invTotalWeight)
+                            : (opaque ? 255 : 0);
+                    finalR = divRound(accR[dx], totalWeight, invTotalWeight);
+                    finalG = divRound(accG[dx], totalWeight, invTotalWeight);
+                    finalB = divRound(accB[dx], totalWeight, invTotalWeight);
                 }
 
-                dstPixels[dy * dstWidth + dx] =
+                dstPixels[rowOffset + dx] =
                         (finalA << 24) | (finalR << 16) | (finalG << 8) | finalB;
             }
         }
 
-        dest.setRGB(0, 0, dstWidth, dstHeight, dstPixels, 0, dstWidth);
+        // En TYPE_INT_ARGB los data elements del raster son directamente ARGB
+        BufferedImage dest = new BufferedImage(dstWidth, dstHeight, BufferedImage.TYPE_INT_ARGB);
+        dest.getRaster().setDataElements(0, 0, dstWidth, dstHeight, dstPixels);
         return dest;
     }
 
-    private static int clamp255(double v) {
-        int i = (int) Math.round(v * 255.0);
-        return (i < 0) ? 0 : (i > 255) ? 255 : i;
+    /**
+     * Reduce horizontalmente una fila fuente a {@code dstWidth} columnas.
+     */
+    private static void reduceRow(int[] srcPixels, int rowStart, AxisWeights xWeights,
+            boolean premultiply, long[] rowA, long[] rowR, long[] rowG, long[] rowB) {
+        int[] offsets = xWeights.offsets;
+        int[] indices = xWeights.indices;
+        int[] weights = xWeights.weights;
+
+        for (int dx = 0; dx < rowA.length; dx++) {
+            long sumA = 0, sumR = 0, sumG = 0, sumB = 0;
+
+            for (int k = offsets[dx]; k < offsets[dx + 1]; k++) {
+                int argb = srcPixels[rowStart + indices[k]];
+                int a = argb >>> 24;
+                int r = (argb >> 16) & 0xFF;
+                int g = (argb >> 8) & 0xFF;
+                int b = argb & 0xFF;
+                if (premultiply) {
+                    r *= a;
+                    g *= a;
+                    b *= a;
+                }
+
+                long w = weights[k];
+                sumA += w * a;
+                sumR += w * r;
+                sumG += w * g;
+                sumB += w * b;
+            }
+
+            rowA[dx] = sumA;
+            rowR[dx] = sumR;
+            rowG[dx] = sumG;
+            rowB[dx] = sumB;
+        }
+    }
+
+    /**
+     * Pesos de área de un eje, precalculados una sola vez.
+     *
+     * Las coordenadas se escalan por {@code srcSize × dstSize}: el píxel fuente
+     * {@code s} ocupa [s·dstSize, (s+1)·dstSize) y el destino {@code d} ocupa
+     * [d·srcSize, (d+1)·srcSize). Así cada solape es un entero exacto y los
+     * pesos de un píxel destino suman siempre {@code srcSize}.
+     *
+     * Las fuentes del destino {@code d} son {@code indices[offsets[d] .. offsets[d+1])}.
+     */
+    private static final class AxisWeights {
+        final int[] offsets;
+        final int[] indices;
+        final int[] weights;
+
+        AxisWeights(int srcSize, int dstSize) {
+            // Cada destino aporta como mucho un píxel fuente compartido con el siguiente
+            int capacity = srcSize + dstSize;
+            offsets = new int[dstSize + 1];
+            int[] idx = new int[capacity];
+            int[] wts = new int[capacity];
+            int n = 0;
+
+            for (int d = 0; d < dstSize; d++) {
+                offsets[d] = n;
+                long lo = (long) d * srcSize;
+                long hi = lo + srcSize;
+                int first = (int) (lo / dstSize);
+                int last = (int) ((hi - 1) / dstSize);
+
+                for (int s = first; s <= last; s++) {
+                    long overlap = Math.min(hi, (long) (s + 1) * dstSize)
+                            - Math.max(lo, (long) s * dstSize);
+                    idx[n] = s;
+                    wts[n] = (int) overlap;
+                    n++;
+                }
+            }
+            offsets[dstSize] = n;
+
+            indices = idx;
+            weights = wts;
+        }
+    }
+
+    // ==================== LECTURA DE PÍXELES ====================
+
+    /**
+     * Lee la imagen como ARGB de 8 bits por canal.
+     *
+     * <ul>
+     *   <li>Escala de grises (PNG gris o gris+alfa): se lee directamente del
+     *       raster. {@link BufferedImage#getRGB} las trata como gris lineal y las
+     *       convierte a sRGB, aclarándolas (un gris 128 se leería como 188).</li>
+     *   <li>sRGB de 8 bits por componente (PNG RGB/RGBA de ImageIO y TGA de
+     *       {@link util.TGAHandler}): lectura en bloque del raster, varias veces
+     *       más rápida que {@code getRGB} y con el mismo resultado.</li>
+     *   <li>Resto (paletas, 16 bits, etc.): {@code getRGB}.</li>
+     * </ul>
+     */
+    private static int[] readArgb(BufferedImage image) {
+        int width = image.getWidth();
+        int height = image.getHeight();
+        ColorModel cm = image.getColorModel();
+
+        if (cm instanceof ComponentColorModel && !cm.isAlphaPremultiplied()) {
+            if (cm.getColorSpace().getType() == ColorSpace.TYPE_GRAY) {
+                return readGray(image.getRaster(), cm, width, height);
+            }
+            if (isByteSrgb(cm, image.getRaster())) {
+                return readByteSrgb(image.getRaster(), cm.getNumComponents(), width, height);
+            }
+        }
+        return image.getRGB(0, 0, width, height, null, 0, width);
+    }
+
+    private static boolean isByteSrgb(ColorModel cm, Raster raster) {
+        if (!cm.getColorSpace().isCS_sRGB()
+                || raster.getTransferType() != DataBuffer.TYPE_BYTE) {
+            return false;
+        }
+        int components = cm.getNumComponents();
+        if (components != (cm.hasAlpha() ? 4 : 3) || raster.getNumBands() != components) {
+            return false;
+        }
+        for (int i = 0; i < components; i++) {
+            if (cm.getComponentSize(i) != 8) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * En un {@link ComponentColorModel} los data elements de cada píxel van en
+     * orden de banda (R, G, B[, A]), sea cual sea su disposición en memoria.
+     */
+    private static int[] readByteSrgb(Raster raster, int components, int width, int height) {
+        byte[] data = (byte[]) raster.getDataElements(0, 0, width, height, null);
+        int[] argb = new int[width * height];
+        for (int i = 0, j = 0; i < argb.length; i++, j += components) {
+            int r = data[j] & 0xFF;
+            int g = data[j + 1] & 0xFF;
+            int b = data[j + 2] & 0xFF;
+            int a = (components == 4) ? (data[j + 3] & 0xFF) : 255;
+            argb[i] = (a << 24) | (r << 16) | (g << 8) | b;
+        }
+        return argb;
+    }
+
+    private static int[] readGray(Raster raster, ColorModel cm, int width, int height) {
+        int[] gray = raster.getSamples(0, 0, width, height, 0, (int[]) null);
+        int grayMax = (1 << cm.getComponentSize(0)) - 1;
+
+        int[] alpha = null;
+        int alphaMax = 255;
+        if (cm.hasAlpha() && raster.getNumBands() > 1) {
+            alpha = raster.getSamples(0, 0, width, height, 1, (int[]) null);
+            alphaMax = (1 << cm.getComponentSize(1)) - 1;
+        }
+
+        int[] argb = new int[width * height];
+        for (int i = 0; i < argb.length; i++) {
+            int g = to8Bit(gray[i], grayMax);
+            int a = (alpha != null) ? to8Bit(alpha[i], alphaMax) : 255;
+            argb[i] = (a << 24) | (g << 16) | (g << 8) | g;
+        }
+        return argb;
+    }
+
+    private static int to8Bit(int value, int max) {
+        return (max == 255) ? value : (int) ((value * 255L + max / 2) / max);
+    }
+
+    /**
+     * Calcula {@code round(num / den)} exacto (mitades hacia arriba) para
+     * {@code 0 ≤ num ≤ 255·den}.
+     *
+     * Estima el cociente con {@code invDen = 1.0 / den} y lo corrige con
+     * aritmética entera: evita la división {@code long}, que es la operación
+     * más costosa del bucle, sin perder exactitud en los empates.
+     */
+    private static int divRound(long num, long den, double invDen) {
+        long q = (long) (num * invDen + 0.5);
+        // q es correcto si -den ≤ 2·(num − q·den) < den
+        long twiceRem = 2 * (num - q * den);
+        if (twiceRem >= den) {
+            q++;
+        } else if (twiceRem < -den) {
+            q--;
+        }
+        return (int) q;
     }
 }
