@@ -10,17 +10,12 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 /**
- * Manejador de archivos TGA (Targa).
- * Soporta lectura y escritura de imágenes TGA con canal alpha.
+ * Lectura y escritura de TGA (Targa) con canal alfa.
  * 
- * El canal alpha en TGA se usa frecuentemente para almacenar información
- * adicional (como mapas de altura o máscaras), por lo que se preserva
- * cuidadosamente durante el procesamiento.
+ * En TGA el alfa suele guardar datos adicionales (mapas de altura, máscaras),
+ * por eso se preserva intacto.
  * 
- * Formatos soportados:
- * - TGA sin comprimir de 24 bits (RGB)
- * - TGA sin comprimir de 32 bits (RGBA)
- * - TGA con compresión RLE de 24 y 32 bits
+ * Formatos soportados: 24 bits (RGB) y 32 bits (RGBA), sin comprimir o RLE.
  * 
  * @author vmonge
  */
@@ -54,9 +49,7 @@ public final class TGAHandler {
     
     // ==================== CONSTRUCTOR PRIVADO ====================
     
-    /**
-     * Constructor privado - clase utilitaria.
-     */
+    /** Clase utilitaria, no instanciable. */
     private TGAHandler() {
         throw new UnsupportedOperationException("Utility class - do not instantiate");
     }
@@ -64,25 +57,22 @@ public final class TGAHandler {
     // ==================== LECTURA DE TGA ====================
     
     /**
-     * Lee un archivo TGA y lo convierte en BufferedImage.
-     * Preserva el canal alpha si existe.
+     * Lee un TGA preservando el canal alfa si existe.
      * 
-     * @param file Archivo TGA a leer
-     * @return BufferedImage con la imagen cargada
-     * @throws IOException Si hay error de lectura o formato no soportado
+     * @param file Archivo TGA
+     * @return Imagen cargada
+     * @throws IOException Si falla la lectura o el formato no es soportado
      */
     public static BufferedImage read(File file) throws IOException {
         try (FileInputStream fis = new FileInputStream(file)) {
-            // Leer header
             byte[] header = new byte[TGA_HEADER_SIZE];
             if (fis.read(header) != TGA_HEADER_SIZE) {
                 throw new IOException("Incomplete TGA header");
             }
             
-            // Parsear header
             TGAHeader tgaHeader = parseHeader(header);
             
-            // Saltar ID y mapa de colores si existen
+            // Saltar ID y mapa de colores
             if (tgaHeader.idLength > 0) {
                 fis.skip(tgaHeader.idLength);
             }
@@ -91,22 +81,18 @@ public final class TGAHandler {
                 fis.skip(colorMapSize);
             }
             
-            // Leer datos de imagen
             int pixelDepth = tgaHeader.pixelDepth;
             int bytesPerPixel = pixelDepth / 8;
             int dataSize = tgaHeader.width * tgaHeader.height * bytesPerPixel;
             byte[] imageData = new byte[dataSize];
             
-            // Verificar tipo de imagen
             boolean isRLE = (tgaHeader.imageType == TGA_TRUECOLOR_RLE || 
                            tgaHeader.imageType == TGA_GRAYSCALE_RLE ||
                            tgaHeader.imageType == TGA_COLORMAPPED_RLE);
             
             if (isRLE) {
-                // Decodificar RLE
                 imageData = decodeRLE(fis, tgaHeader.width, tgaHeader.height, bytesPerPixel);
             } else {
-                // Leer datos sin comprimir
                 int bytesRead = 0;
                 while (bytesRead < dataSize) {
                     int read = fis.read(imageData, bytesRead, dataSize - bytesRead);
@@ -115,7 +101,6 @@ public final class TGAHandler {
                 }
             }
             
-            // Crear BufferedImage
             BufferedImage image = createBufferedImage(imageData, tgaHeader);
             
             return image;
@@ -123,10 +108,8 @@ public final class TGAHandler {
     }
     
     /**
-     * Parsea el header TGA.
-     * 
      * @param header Bytes del header
-     * @return Estructura con los datos del header
+     * @return Header parseado
      */
     private static TGAHeader parseHeader(byte[] header) {
         TGAHeader h = new TGAHeader();
@@ -151,22 +134,16 @@ public final class TGAHandler {
         return h;
     }
     
-    /**
-     * Lee un short (2 bytes) en little-endian.
-     */
+    /** Lee un short (2 bytes) en little-endian. */
     private static int readShort(byte[] data, int offset) {
         return (data[offset] & 0xFF) | ((data[offset + 1] & 0xFF) << 8);
     }
     
     /**
-     * Decodifica datos comprimidos con RLE.
+     * Decodifica datos RLE.
      * 
-     * @param fis Stream de entrada
-     * @param width Ancho de la imagen
-     * @param height Alto de la imagen
-     * @param bytesPerPixel Bytes por píxel
-     * @return Datos decodificados
-     * @throws IOException Si hay error de lectura
+     * @return Píxeles decodificados
+     * @throws IOException Si falla la lectura
      */
     private static byte[] decodeRLE(FileInputStream fis, int width, int height, int bytesPerPixel) 
             throws IOException {
@@ -202,35 +179,27 @@ public final class TGAHandler {
         return output;
     }
     
-    /**
-     * Crea un BufferedImage a partir de los datos TGA.
-     * 
-     * @param imageData Datos de píxeles
-     * @param header Header TGA
-     * @return BufferedImage creada
-     */
+    /** Crea la imagen a partir de los píxeles TGA (BGR/BGRA). */
     private static BufferedImage createBufferedImage(byte[] imageData, TGAHeader header) {
         int width = header.width;
         int height = header.height;
         int bytesPerPixel = header.pixelDepth / 8;
         
-        // Determinar si tiene alpha
         boolean hasAlpha = (bytesPerPixel == 4);
         int imageType = hasAlpha ? BufferedImage.TYPE_4BYTE_ABGR : BufferedImage.TYPE_3BYTE_BGR;
         
         BufferedImage image = new BufferedImage(width, height, imageType);
         
-        // Verificar orientación (bit 5 del descriptor: 0=bottom-up, 1=top-down)
+        // Bit 5 del descriptor: 0 = bottom-up, 1 = top-down
         boolean topDown = (header.imageDescriptor & 0x20) != 0;
         
-        // Copiar píxeles
         for (int y = 0; y < height; y++) {
             int destY = topDown ? y : (height - 1 - y);
             
             for (int x = 0; x < width; x++) {
                 int srcOffset = (y * width + x) * bytesPerPixel;
                 
-                // TGA almacena en BGRA, convertir a ARGB
+                // BGRA → ARGB
                 int b = imageData[srcOffset] & 0xFF;
                 int g = imageData[srcOffset + 1] & 0xFF;
                 int r = imageData[srcOffset + 2] & 0xFF;
@@ -247,12 +216,11 @@ public final class TGAHandler {
     // ==================== ESCRITURA DE TGA ====================
     
     /**
-     * Escribe un BufferedImage como archivo TGA.
-     * Preserva el canal alpha si la imagen lo tiene.
+     * Escribe la imagen como TGA sin comprimir, con alfa si lo tiene.
      * 
      * @param image Imagen a guardar
      * @param file Archivo de destino
-     * @throws IOException Si hay error de escritura
+     * @throws IOException Si falla la escritura
      */
     public static void write(BufferedImage image, File file) throws IOException {
         int width = image.getWidth();
@@ -262,7 +230,6 @@ public final class TGAHandler {
         int pixelDepth = bytesPerPixel * 8;
         
         try (FileOutputStream fos = new FileOutputStream(file)) {
-            // Escribir header
             byte[] header = new byte[TGA_HEADER_SIZE];
             header[0] = 0; // ID length
             header[1] = 0; // Color map type
@@ -280,20 +247,18 @@ public final class TGAHandler {
             
             fos.write(header);
             
-            // Escribir datos de píxeles en formato BGRA (o BGR)
+            // Píxeles en BGRA (o BGR)
             byte[] pixelData = new byte[bytesPerPixel];
             
             for (int y = 0; y < height; y++) {
                 for (int x = 0; x < width; x++) {
                     int argb = image.getRGB(x, y);
                     
-                    // Extraer componentes ARGB
                     int a = (argb >> 24) & 0xFF;
                     int r = (argb >> 16) & 0xFF;
                     int g = (argb >> 8) & 0xFF;
                     int b = argb & 0xFF;
                     
-                    // Escribir en orden BGRA
                     pixelData[0] = (byte) b;
                     pixelData[1] = (byte) g;
                     pixelData[2] = (byte) r;
@@ -305,11 +270,9 @@ public final class TGAHandler {
                 }
             }
             
-            // Escribir footer TGA 2.0 (opcional pero recomendado)
+            // Footer TGA 2.0 (opcional pero recomendado)
             byte[] footer = new byte[26];
-            // Extension offset = 0 (no extension)
-            // Developer offset = 0 (no developer area)
-            // Signature "TRUEVISION-XFILE."
+            // Offsets de extensión y developer = 0; luego la firma
             String signature = "TRUEVISION-XFILE.";
             System.arraycopy(signature.getBytes(), 0, footer, 8, signature.length());
             footer[25] = 0; // Null terminator
@@ -319,9 +282,7 @@ public final class TGAHandler {
     
     // ==================== CLASE AUXILIAR PARA HEADER ====================
     
-    /**
-     * Estructura para almacenar los datos del header TGA.
-     */
+    /** Campos del header TGA. */
     private static class TGAHeader {
         int idLength;
         int colorMapType;
@@ -340,10 +301,8 @@ public final class TGAHandler {
     // ==================== MÉTODOS DE UTILIDAD ====================
     
     /**
-     * Verifica si un archivo es un TGA válido.
-     * 
      * @param file Archivo a verificar
-     * @return true si parece ser un archivo TGA válido
+     * @return true si el header indica un TGA de tipo y profundidad soportados
      */
     public static boolean isValidTGA(File file) {
         if (!file.exists() || !file.isFile()) {
@@ -359,13 +318,11 @@ public final class TGAHandler {
             int imageType = header[2] & 0xFF;
             int pixelDepth = header[16] & 0xFF;
             
-            // Verificar tipo de imagen válido
             boolean validType = (imageType == TGA_TRUECOLOR || 
                                imageType == TGA_TRUECOLOR_RLE ||
                                imageType == TGA_GRAYSCALE ||
                                imageType == TGA_GRAYSCALE_RLE);
             
-            // Verificar profundidad válida
             boolean validDepth = (pixelDepth == 8 || pixelDepth == 16 || 
                                 pixelDepth == 24 || pixelDepth == 32);
             

@@ -11,11 +11,8 @@ import javafx.beans.property.StringProperty;
 import javafx.scene.image.Image;
 
 /**
- * Modelo que representa una textura y su información asociada.
- * Incluye referencias a texturas MER (_mer, _mers) y de normales
- * (_normal, _n) si existen.
- * 
- * Implementa propiedades observables de JavaFX para binding con la UI.
+ * Textura base con sus texturas MER (_mer, _mers) y de normales (_normal, _n)
+ * asociadas, si existen. Expone propiedades observables de JavaFX para la UI.
  * 
  * @author vmonge
  */
@@ -23,49 +20,46 @@ public class TextureInfo {
     
     // ==================== ARCHIVOS ====================
     
-    /** Archivo de la textura base */
+    /** Textura base. */
     private final File baseFile;
     
-    /** Archivos de textura MER (metallic/emissive/roughness) asociados */
+    /** Texturas MER (metallic/emissive/roughness) asociadas. */
     private final List<File> merFiles;
     
-    /** Archivos de textura de normales asociados */
+    /** Texturas de normales asociadas. */
     private final List<File> normalFiles;
     
     // ==================== PROPIEDADES DE IMAGEN ====================
     
-    /** Ancho de la imagen en píxeles */
+    /** Ancho en píxeles. */
     private final int width;
     
-    /** Alto de la imagen en píxeles */
+    /** Alto en píxeles. */
     private final int height;
     
-    /** Imagen cargada para preview (miniatura) */
+    /** Miniatura de preview. */
     private Image thumbnailImage;
     
     // ==================== PROPIEDADES OBSERVABLES ====================
     
-    /** Propiedad observable para el texto de resolución */
+    /** Texto de resolución. */
     private final StringProperty resolutionText;
     
-    /** Propiedad observable para indicar si ya fue procesada */
+    /** Indica si ya fue procesada. */
     private final BooleanProperty processed;
     
     /**
-     * Propiedad observable de selección (modo selección múltiple).
-     * Vive en el modelo (no en la vista) para que sobreviva al
-     * reciclado/repintado del CanvasTextureGrid.
+     * Selección (modo selección múltiple). Vive en el modelo para sobrevivir
+     * al repintado del CanvasTextureGrid.
      */
     private final BooleanProperty selected;
     
     // ==================== CONSTRUCTOR ====================
     
     /**
-     * Crea una nueva instancia de TextureInfo.
-     * 
-     * @param baseFile Archivo de la textura base (no null)
-     * @param width Ancho de la imagen en píxeles
-     * @param height Alto de la imagen en píxeles
+     * @param baseFile Textura base (no null)
+     * @param width Ancho en píxeles
+     * @param height Alto en píxeles
      */
     public TextureInfo(File baseFile, int width, int height) {
         if (baseFile == null) {
@@ -79,7 +73,6 @@ public class TextureInfo {
         this.normalFiles = new ArrayList<>();
         this.thumbnailImage = null;
         
-        // Inicializar propiedades observables
         this.resolutionText = new SimpleStringProperty(buildResolutionText());
         this.processed = new SimpleBooleanProperty(false);
         this.selected = new SimpleBooleanProperty(false);
@@ -87,12 +80,7 @@ public class TextureInfo {
     
     // ==================== MÉTODOS DE CONSTRUCCIÓN DE TEXTO ====================
     
-    /**
-     * Construye el texto de resolución incluyendo indicadores de texturas adicionales.
-     * Formato: "WIDTHxHEIGHT [M][N]"
-     * 
-     * @return Texto formateado con la resolución y marcadores
-     */
+    /** @return Resolución con marcadores de texturas asociadas: "WIDTHxHEIGHT [M][N]" */
     private String buildResolutionText() {
         StringBuilder sb = new StringBuilder();
         sb.append(width).append("x").append(height);
@@ -107,51 +95,41 @@ public class TextureInfo {
         return sb.toString();
     }
     
-    /**
-     * Actualiza el texto de resolución después de cambiar los archivos asociados.
-     */
+    /** Recalcula el texto de resolución tras cambiar los archivos asociados. */
     public void updateResolutionText() {
         resolutionText.set(buildResolutionText());
     }
     
     // ==================== GETTERS Y SETTERS ====================
     
-    /**
-     * @return Archivo de la textura base
-     */
+    /** @return Textura base */
     public File getBaseFile() {
         return baseFile;
     }
     
-    /**
-     * @return Nombre del archivo sin extensión
-     */
+    /** @return Nombre del archivo sin extensión */
     public String getBaseName() {
         String name = baseFile.getName();
         int dotIndex = name.lastIndexOf('.');
         return dotIndex > 0 ? name.substring(0, dotIndex) : name;
     }
     
-    /**
-     * @return Extensión del archivo incluyendo el punto (ej: ".png")
-     */
+    /** @return Extensión en minúsculas con el punto (ej: ".png") */
     public String getExtension() {
         String name = baseFile.getName();
         int dotIndex = name.lastIndexOf('.');
         return dotIndex > 0 ? name.substring(dotIndex).toLowerCase() : "";
     }
     
-    /**
-     * @return Lista inmutable de archivos de textura MER asociados
-     */
+    /** @return Copia inmutable de las texturas MER asociadas */
     public List<File> getMerFiles() {
         return Collections.unmodifiableList(new ArrayList<>(merFiles));
     }
     
     /**
-     * Agrega un archivo de textura MER si aún no está asociado.
+     * Asocia una textura MER si no lo estaba ya.
      * 
-     * @param merFile Archivo MER; los valores null se ignoran
+     * @param merFile Archivo MER; null se ignora
      */
     public void addMerFile(File merFile) {
         if (merFile != null && !merFiles.contains(merFile)) {
@@ -160,24 +138,20 @@ public class TextureInfo {
         }
     }
     
-    /**
-     * @return true si tiene textura MER asociada
-     */
+    /** @return true si tiene textura MER */
     public boolean hasMer() {
         return !merFiles.isEmpty();
     }
     
-    /**
-     * @return Lista inmutable de archivos de textura de normales asociados
-     */
+    /** @return Copia inmutable de las texturas de normales asociadas */
     public List<File> getNormalFiles() {
         return Collections.unmodifiableList(new ArrayList<>(normalFiles));
     }
     
     /**
-     * Agrega un archivo de textura de normales si aún no está asociado.
+     * Asocia una textura de normales si no lo estaba ya.
      * 
-     * @param normalFile Archivo de normales; los valores null se ignoran
+     * @param normalFile Archivo de normales; null se ignora
      */
     public void addNormalFile(File normalFile) {
         if (normalFile != null && !normalFiles.contains(normalFile)) {
@@ -186,117 +160,81 @@ public class TextureInfo {
         }
     }
     
-    /**
-     * @return true si tiene textura de normales asociada
-     */
+    /** @return true si tiene textura de normales */
     public boolean hasNormal() {
         return !normalFiles.isEmpty();
     }
     
-    /**
-     * @return Ancho de la imagen en píxeles
-     */
+    /** @return Ancho en píxeles */
     public int getWidth() {
         return width;
     }
     
-    /**
-     * @return Alto de la imagen en píxeles
-     */
+    /** @return Alto en píxeles */
     public int getHeight() {
         return height;
     }
     
-    /**
-     * @return Imagen miniatura para preview
-     */
+    /** @return Miniatura de preview */
     public Image getThumbnailImage() {
         return thumbnailImage;
     }
     
-    /**
-     * Establece la imagen miniatura.
-     * 
-     * @param thumbnailImage Imagen de preview
-     */
+    /** @param thumbnailImage Miniatura de preview */
     public void setThumbnailImage(Image thumbnailImage) {
         this.thumbnailImage = thumbnailImage;
     }
     
     // ==================== PROPIEDADES OBSERVABLES ====================
     
-    /**
-     * @return Propiedad de texto de resolución para binding
-     */
+    /** @return Propiedad del texto de resolución */
     public StringProperty resolutionTextProperty() {
         return resolutionText;
     }
     
-    /**
-     * @return Texto de resolución actual
-     */
+    /** @return Texto de resolución actual */
     public String getResolutionText() {
         return resolutionText.get();
     }
     
-    /**
-     * @return Propiedad de estado procesado para binding
-     */
+    /** @return Propiedad de estado procesado */
     public BooleanProperty processedProperty() {
         return processed;
     }
     
-    /**
-     * @return true si la textura ya fue procesada
-     */
+    /** @return true si la textura ya fue procesada */
     public boolean isProcessed() {
         return processed.get();
     }
     
-    /**
-     * Marca la textura como procesada.
-     * 
-     * @param processed Estado de procesamiento
-     */
+    /** @param processed Estado de procesamiento */
     public void setProcessed(boolean processed) {
         this.processed.set(processed);
     }
     
-    /**
-     * @return Propiedad de selección para binding
-     */
+    /** @return Propiedad de selección */
     public BooleanProperty selectedProperty() {
         return selected;
     }
     
-    /**
-     * @return true si la textura está seleccionada (modo selección múltiple)
-     */
+    /** @return true si la textura está seleccionada (modo selección múltiple) */
     public boolean isSelected() {
         return selected.get();
     }
     
-    /**
-     * Cambia el estado de selección de la textura.
-     * 
-     * @param selected true para seleccionar, false para deseleccionar
-     */
+    /** @param selected true para seleccionar, false para deseleccionar */
     public void setSelected(boolean selected) {
         this.selected.set(selected);
     }
     
     // ==================== MÉTODOS DE UTILIDAD ====================
     
-    /**
-     * @return Directorio padre del archivo base
-     */
+    /** @return Directorio padre del archivo base */
     public File getParentDirectory() {
         return baseFile.getParentFile();
     }
     
-    /**
-     * @return Ruta completa del archivo base
-     */
+    /** @return Ruta absoluta del archivo base */
     public String getFullPath() {
         return baseFile.getAbsolutePath();
     }

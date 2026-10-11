@@ -10,34 +10,28 @@ import java.util.Arrays;
 import util.AlphaMode;
 
 /**
- * Implementación del algoritmo Area Resampling (Pixel Area Relation) para
- * reducción de imágenes. Cada píxel se trata como un área 1×1 y se calcula
- * la intersección exacta con los píxeles fuente.
+ * Area Resampling (Pixel Area Relation) para reducir imágenes: cada píxel es
+ * un área 1×1 y se usa su intersección exacta con los píxeles fuente.
  *
- * Usa alfa premultiplicado para mezclar correctamente píxeles con diferente
- * nivel de transparencia, evitando halos oscuros en bordes semitransparentes.
+ * El alfa premultiplicado evita halos oscuros en bordes semitransparentes.
  *
- * Soporta tres modos de procesamiento del canal alfa:
- * - {@link AlphaMode#ADAPTIVE}: umbral binario donde todos los píxeles fuente
- *   del píxel destino tienen alfa 0 o 255 (borde de recorte) y alfa continuo
- *   donde alguno tiene opacidad parcial.
- * - {@link AlphaMode#BINARY}: umbral binario (≥ 0.5 → opaco, &lt; 0.5 → transparente),
- *   ideal para texturas con transparencia de recorte.
- * - {@link AlphaMode#CONTINUOUS}: preserva el valor real del alfa, ideal para
- *   texturas con opacidad parcial (hielo, agua, cristal).
+ * Modos de alfa:
+ * - {@link AlphaMode#ADAPTIVE}: umbral binario si todos los píxeles fuente del
+ *   destino tienen alfa 0 o 255 (borde de recorte); continuo si alguno es parcial.
+ * - {@link AlphaMode#BINARY}: ≥ 0.5 → opaco, &lt; 0.5 → transparente. Para
+ *   texturas de recorte.
+ * - {@link AlphaMode#CONTINUOUS}: conserva el alfa real. Para opacidad parcial
+ *   (hielo, agua, vidrio).
  *
  * Los píxeles destino con alfa 0 no se rellenan de negro: guardan el color de
- * los píxeles visibles de su zona o, si toda la zona es transparente, el RGB
- * que la fuente guardaba en ella. Así los mipmaps y el filtrado del motor no
- * oscurecen los bordes.
+ * los píxeles visibles de su zona o, si toda es transparente, el RGB que tenía
+ * la fuente. Así los mipmaps y el filtrado del motor no oscurecen los bordes.
  *
- * Detalles de implementación:
- * - El filtro de caja es separable: los pesos de cada eje se precalculan una
- *   sola vez y cada fila fuente se reduce horizontalmente antes de acumularse
- *   en vertical.
- * - Los pesos son enteros exactos (solapes medidos en unidades de
- *   1 / (ancho fuente × ancho destino)) y las sumas se hacen con {@code long},
- *   por lo que el redondeo y el umbral de alfa no dependen de errores de coma
+ * Implementación:
+ * - Filtro de caja separable: pesos por eje precalculados; cada fila fuente se
+ *   reduce en horizontal antes de acumularse en vertical.
+ * - Pesos enteros exactos (unidades de 1 / (ancho fuente × ancho destino)) y
+ *   sumas en {@code long}: el redondeo y el umbral no sufren errores de coma
  *   flotante.
  *
  * @author vmonge
@@ -49,8 +43,8 @@ public final class AreaResampler {
     }
 
     /**
-     * Redimensiona una imagen usando area resampling con alfa premultiplicado.
-     * Usa alfa binario por defecto (comportamiento original).
+     * Area resampling con alfa premultiplicado y alfa binario (comportamiento
+     * original).
      *
      * @param source   Imagen fuente
      * @param dstWidth Ancho destino (debe ser &gt; 0)
@@ -62,7 +56,7 @@ public final class AreaResampler {
     }
 
     /**
-     * Redimensiona una imagen usando area resampling con alfa premultiplicado.
+     * Area resampling con alfa premultiplicado.
      *
      * @param source    Imagen fuente
      * @param dstWidth  Ancho destino (debe ser &gt; 0)
@@ -76,13 +70,12 @@ public final class AreaResampler {
     }
 
     /**
-     * Redimensiona tratando RGB y Alpha como canales independientes.
-     * Diseñado para TGA donde el alfa es una máscara de recorte y el RGB
-     * contiene información válida en toda la imagen (foreground + background).
+     * Redimensiona con RGB y alfa independientes. Pensado para TGA cuyo alfa es
+     * una máscara de recorte y cuyo RGB es válido en toda la imagen.
      *
      * <ul>
-     *   <li>RGB: promedio ponderado por área sin premultiplicar por alfa</li>
-     *   <li>Alpha: promedio ponderado por área con umbral binario (≥ 0.5 → 255)</li>
+     *   <li>RGB: promedio por área sin premultiplicar</li>
+     *   <li>Alfa: promedio por área con umbral binario (≥ 0.5 → 255)</li>
      * </ul>
      *
      * @param source    Imagen fuente
@@ -96,10 +89,10 @@ public final class AreaResampler {
     }
 
     /**
-     * Redimensiona tratando RGB y Alpha como canales independientes, con el
-     * modo de alfa indicado. Con {@link AlphaMode#CONTINUOUS} los cuatro canales
-     * se promedian por separado, que es lo correcto para mapas de datos
-     * (MER/MERS, normales) cuyo alfa no representa transparencia.
+     * Redimensiona con RGB y alfa independientes y el modo de alfa indicado.
+     * Con {@link AlphaMode#CONTINUOUS} los cuatro canales se promedian por
+     * separado, lo correcto para mapas de datos (MER/MERS, normales) cuyo alfa
+     * no es transparencia.
      *
      * @param source    Imagen fuente
      * @param dstWidth  Ancho destino (debe ser &gt; 0)
@@ -122,9 +115,9 @@ public final class AreaResampler {
      *   <li>sumA = Σ w·a</li>
      *   <li>sumC = Σ w·a·c (premultiplicado) o Σ w·c (independiente)</li>
      * </ul>
-     * La suma de pesos de un píxel destino es siempre {@code srcWidth × srcHeight}.
-     * En modo {@link AlphaMode#ADAPTIVE} se cuenta además cuántos píxeles fuente
-     * tienen alfa parcial (ni 0 ni 255) para decidir si se aplica el umbral.
+     * Los pesos de un píxel destino suman siempre {@code srcWidth × srcHeight}.
+     * En {@link AlphaMode#ADAPTIVE} se cuentan además los píxeles fuente con
+     * alfa parcial (ni 0 ni 255) para decidir si se aplica el umbral.
      */
     private static BufferedImage resample(BufferedImage source, int dstWidth, int dstHeight,
             boolean premultiply, AlphaMode alphaMode) {
@@ -152,8 +145,8 @@ public final class AreaResampler {
         boolean continuous = alphaMode == AlphaMode.CONTINUOUS;
         boolean adaptive = alphaMode == AlphaMode.ADAPTIVE;
 
-        // Fila fuente reducida horizontalmente (se reutiliza si la siguiente
-        // fila destino empieza en la misma fila fuente)
+        // Fila fuente reducida en horizontal; se reutiliza si la siguiente fila
+        // destino empieza en la misma fila fuente
         long[] rowA = new long[dstWidth];
         long[] rowR = new long[dstWidth];
         long[] rowG = new long[dstWidth];
@@ -214,8 +207,8 @@ public final class AreaResampler {
                 if (!premultiply) {
                     rgb = packRgb(accR[dx], accG[dx], accB[dx], totalWeight, invTotalWeight);
                 } else if (sumA != 0) {
-                    // Si el umbral deja el píxel transparente, conserva igualmente
-                    // el color de sus píxeles visibles en lugar de negro
+                    // Aunque el umbral lo deje transparente, conserva el color de
+                    // sus píxeles visibles en lugar de negro
                     rgb = packRgb(accR[dx], accG[dx], accB[dx], sumA, 1.0 / sumA);
                 } else {
                     // Zona totalmente transparente: conserva el RGB que guardaba la fuente
@@ -227,16 +220,16 @@ public final class AreaResampler {
             }
         }
 
-        // En TYPE_INT_ARGB los data elements del raster son directamente ARGB
+        // En TYPE_INT_ARGB los data elements del raster ya son ARGB
         BufferedImage dest = new BufferedImage(dstWidth, dstHeight, BufferedImage.TYPE_INT_ARGB);
         dest.getRaster().setDataElements(0, 0, dstWidth, dstHeight, dstPixels);
         return dest;
     }
 
     /**
-     * Reduce horizontalmente una fila fuente a {@code dstWidth} columnas.
-     * Si {@code rowSoft} no es null, guarda en él cuántos píxeles fuente de
-     * cada columna destino tienen alfa parcial.
+     * Reduce en horizontal una fila fuente a {@code dstWidth} columnas. Si
+     * {@code rowSoft} no es null, guarda cuántos píxeles fuente de cada columna
+     * destino tienen alfa parcial.
      */
     private static void reduceRow(int[] srcPixels, int rowStart, AxisWeights xWeights,
             boolean premultiply, long[] rowA, long[] rowR, long[] rowG, long[] rowB,
@@ -283,9 +276,9 @@ public final class AreaResampler {
     }
 
     /**
-     * Promedio por área del RGB sin ponderar por alfa de los píxeles fuente del
-     * píxel destino ({@code dx}, {@code dy}). Solo se usa cuando todos tienen
-     * alfa 0, así que el bucle separable no lo acumula.
+     * Promedio por área del RGB, sin ponderar por alfa, de las fuentes del
+     * destino ({@code dx}, {@code dy}). Solo se usa cuando todas tienen alfa 0,
+     * por eso el bucle separable no lo acumula.
      */
     private static int averageHiddenRgb(int[] srcPixels, int srcWidth, AxisWeights xWeights,
             AxisWeights yWeights, int dx, int dy, long totalWeight, double invTotalWeight) {
@@ -304,9 +297,7 @@ public final class AreaResampler {
         return packRgb(sumR, sumG, sumB, totalWeight, invTotalWeight);
     }
 
-    /**
-     * Empaqueta {@code round(sum / den)} de cada canal como RGB de 24 bits.
-     */
+    /** Empaqueta {@code round(sum / den)} de cada canal como RGB de 24 bits. */
     private static int packRgb(long sumR, long sumG, long sumB, long den, double invDen) {
         return (divRound(sumR, den, invDen) << 16)
                 | (divRound(sumG, den, invDen) << 8)
@@ -314,7 +305,7 @@ public final class AreaResampler {
     }
 
     /**
-     * Pesos de área de un eje, precalculados una sola vez.
+     * Pesos de área de un eje, precalculados.
      *
      * Las coordenadas se escalan por {@code srcSize × dstSize}: el píxel fuente
      * {@code s} ocupa [s·dstSize, (s+1)·dstSize) y el destino {@code d} ocupa
@@ -364,13 +355,13 @@ public final class AreaResampler {
      * Lee la imagen como ARGB de 8 bits por canal.
      *
      * <ul>
-     *   <li>Escala de grises (PNG gris o gris+alfa): se lee directamente del
-     *       raster. {@link BufferedImage#getRGB} las trata como gris lineal y las
-     *       convierte a sRGB, aclarándolas (un gris 128 se leería como 188).</li>
-     *   <li>sRGB de 8 bits por componente (PNG RGB/RGBA de ImageIO y TGA de
-     *       {@link util.TGAHandler}): lectura en bloque del raster, varias veces
-     *       más rápida que {@code getRGB} y con el mismo resultado.</li>
-     *   <li>Resto (paletas, 16 bits, etc.): {@code getRGB}.</li>
+     *   <li>Escala de grises (PNG gris o gris+alfa): directamente del raster;
+     *       {@link BufferedImage#getRGB} las trata como gris lineal y las aclara
+     *       al pasar a sRGB (un gris 128 se leería como 188).</li>
+     *   <li>sRGB de 8 bits (PNG RGB/RGBA de ImageIO y TGA de
+     *       {@link util.TGAHandler}): lectura en bloque del raster, mismo
+     *       resultado que {@code getRGB} y varias veces más rápida.</li>
+     *   <li>Resto (paletas, 16 bits...): {@code getRGB}.</li>
      * </ul>
      */
     private static int[] readArgb(BufferedImage image) {
@@ -452,8 +443,8 @@ public final class AreaResampler {
      * {@code 0 ≤ num ≤ 255·den}.
      *
      * Estima el cociente con {@code invDen = 1.0 / den} y lo corrige con
-     * aritmética entera: evita la división {@code long}, que es la operación
-     * más costosa del bucle, sin perder exactitud en los empates.
+     * aritmética entera: evita la división {@code long}, lo más costoso del
+     * bucle, sin perder exactitud en los empates.
      */
     private static int divRound(long num, long den, double invDen) {
         long q = (long) (num * invDen + 0.5);

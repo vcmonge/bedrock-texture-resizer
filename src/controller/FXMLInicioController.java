@@ -39,20 +39,15 @@ import view.CanvasTextureGrid;
 import view.DesignTokens;
 
 /**
- * Controlador principal de la aplicación Bedrock Texture Resizer.
- * Gestiona la interacción del usuario con la interfaz gráfica.
+ * Controlador de la ventana principal:
+ * - Selección de la carpeta raíz
+ * - Carga de texturas (Blocks, Items, Environment, Entity)
+ * - Procesamiento individual y por selección múltiple
+ * - Ordenación por resolución
+ * - Estado de la UI
  * 
- * Responsabilidades:
- * - Manejar selección de carpeta raíz
- * - Coordinar carga de texturas (Blocks, Items, Environment, Entity)
- * - Gestionar eventos de procesamiento
- * - Manejar modo de selección múltiple
- * - Gestionar ordenamiento por resolución
- * - Actualizar estado de la UI
- * 
- * Cada categoría de texturas se muestra en un {@link CanvasTextureGrid}
- * que dibuja todas las miniaturas en un único Canvas (en lugar de un
- * nodo por textura), evitando que el scene graph se vuelva pesado con
+ * Cada categoría se muestra en un {@link CanvasTextureGrid}, que dibuja todas
+ * las miniaturas en un único Canvas para no sobrecargar el scene graph con
  * miles de texturas.
  * 
  * @author vmonge
@@ -69,7 +64,7 @@ public class FXMLInicioController implements Initializable {
     @FXML private ComboBox<AlphaMode> cmbAlphaMode;
     @FXML private TabPane tabPane;
     
-    // Scroll panes (reciben un CanvasTextureGrid como content)
+    // Contienen un CanvasTextureGrid cada uno
     @FXML private ScrollPane scrollBlocks;
     @FXML private ScrollPane scrollItems;
     @FXML private ScrollPane scrollEnvironment;
@@ -82,7 +77,7 @@ public class FXMLInicioController implements Initializable {
     @FXML private Button btnSelectAll;
     @FXML private Button btnDeselectAll;
     
-    // Control de ordenamiento
+    // Ordenación
     @FXML private ComboBox<String> cmbSortOrder;
     
     // Etiquetas de estado
@@ -95,43 +90,43 @@ public class FXMLInicioController implements Initializable {
     
     // ==================== GRIDS VIRTUALIZADOS ====================
     
-    /** Grid del Canvas para texturas de bloques. */
+    /** Grid de bloques. */
     private CanvasTextureGrid gridBlocks;
     
-    /** Grid del Canvas para texturas de items. */
+    /** Grid de items. */
     private CanvasTextureGrid gridItems;
     
-    /** Grid del Canvas para texturas de entorno. */
+    /** Grid de entorno. */
     private CanvasTextureGrid gridEnvironment;
     
-    /** Grid del Canvas para texturas de entidades. */
+    /** Grid de entidades. */
     private CanvasTextureGrid gridEntity;
     
     // ==================== SERVICIOS ====================
     
-    /** Servicio para cargar y procesar texturas */
+    /** Carga y procesa las texturas. */
     private TextureService textureService;
     
     // ==================== ESTADO ====================
     
-    /** Directorio raíz seleccionado */
+    /** Directorio raíz seleccionado. */
     private File rootDirectory;
     
-    /** Listas de texturas por categoría */
+    /** Texturas por categoría. */
     private List<TextureInfo> blockTextures;
     private List<TextureInfo> itemTextures;
     private List<TextureInfo> environmentTextures;
     private List<TextureInfo> entityTextures;
     
-    /** Contador de texturas procesadas */
+    /** Texturas procesadas. */
     private int processedCount = 0;
     
-    /** Total de texturas */
+    /** Total de texturas cargadas. */
     private int totalTextures = 0;
     
     /**
-     * Modo de selección múltiple, observable. Se comparte con todos los
-     * grids para que sepan si los clicks alternan selección o no.
+     * Modo selección múltiple, compartido con los grids para que sepan si el
+     * clic alterna la selección.
      */
     private final BooleanProperty selectionModeActive = new SimpleBooleanProperty(false);
     
@@ -151,10 +146,8 @@ public class FXMLInicioController implements Initializable {
         
         initializeSortOrderCombo();
         
-        // Crear servicio con factor de escala por defecto
         createTextureService();
         
-        // Crear grids virtualizados y conectarlos a sus ScrollPanes
         gridBlocks = createGrid(scrollBlocks);
         gridItems = createGrid(scrollItems);
         gridEnvironment = createGrid(scrollEnvironment);
@@ -164,8 +157,8 @@ public class FXMLInicioController implements Initializable {
     }
     
     /**
-     * Crea un CanvasTextureGrid, lo conecta al ScrollPane correspondiente
-     * y le pasa los callbacks de procesamiento y cambio de selección.
+     * Crea un grid dentro del ScrollPane con los callbacks de procesamiento y
+     * de cambio de selección.
      */
     private CanvasTextureGrid createGrid(ScrollPane scroll) {
         CanvasTextureGrid grid = new CanvasTextureGrid();
@@ -226,9 +219,7 @@ public class FXMLInicioController implements Initializable {
         });
     }
     
-    /**
-     * Crea o recrea el servicio de texturas con la configuración actual.
-     */
+    /** (Re)crea el servicio de texturas con la configuración de los combos. */
     private void createTextureService() {
         if (textureService != null) {
             textureService.shutdown();
@@ -325,11 +316,8 @@ public class FXMLInicioController implements Initializable {
             
             @Override
             protected void succeeded() {
-                // Asignar a cada grid: como el grid renderiza por Canvas, esto es O(N)
-                // pero no crea nodos: instantáneo incluso con miles de texturas.
                 displayTextures();
                 
-                // Aplicar ordenamiento si está seleccionado
                 applySorting();
                 
                 setControlsEnabled(true);
@@ -379,7 +367,7 @@ public class FXMLInicioController implements Initializable {
             selectionToolbar.setVisible(false);
             selectionToolbar.setManaged(false);
             
-            // Los grids ya escuchan selectionModeActive y vacían su selección.
+            // Los grids vacían su selección al escuchar selectionModeActive
             updateSelectedCount();
         }
     }
@@ -400,9 +388,7 @@ public class FXMLInicioController implements Initializable {
         }
     }
     
-    /**
-     * @return Grid de la pestaña actualmente activa, o null
-     */
+    /** @return Grid de la pestaña activa, o null */
     private CanvasTextureGrid getActiveGrid() {
         int idx = tabPane.getSelectionModel().getSelectedIndex();
         switch (idx) {
@@ -414,9 +400,7 @@ public class FXMLInicioController implements Initializable {
         }
     }
     
-    /**
-     * @return Iterable con todos los grids del controller
-     */
+    /** @return Todos los grids */
     private List<CanvasTextureGrid> allGrids() {
         return Arrays.asList(gridBlocks, gridItems, gridEnvironment, gridEntity);
     }
@@ -438,9 +422,7 @@ public class FXMLInicioController implements Initializable {
         }
     }
     
-    /**
-     * Recolecta todas las texturas seleccionadas de todos los grids.
-     */
+    /** @return Texturas seleccionadas en todos los grids */
     private Set<TextureInfo> getAllSelectedTextures() {
         Set<TextureInfo> all = new LinkedHashSet<>();
         for (CanvasTextureGrid g : allGrids()) {
@@ -449,9 +431,7 @@ public class FXMLInicioController implements Initializable {
         return all;
     }
     
-    /**
-     * Recalcula el contador de seleccionados y actualiza el botón.
-     */
+    /** Actualiza el contador y el estado del botón de procesar selección. */
     private void updateSelectedCount() {
         int count = 0;
         for (CanvasTextureGrid g : allGrids()) {
@@ -463,10 +443,7 @@ public class FXMLInicioController implements Initializable {
     
     // ==================== ORDENAMIENTO ====================
     
-    /**
-     * Ordena las listas de TextureInfo según el criterio del combo
-     * y reasigna a sus grids.
-     */
+    /** Ordena las listas según el combo y las reasigna a sus grids. */
     private void applySorting() {
         String sortOrder = cmbSortOrder.getValue();
         if (sortOrder == null) return;
@@ -480,8 +457,8 @@ public class FXMLInicioController implements Initializable {
     }
     
     /**
-     * Si el comparador no es null, ordena la lista in-place y la
-     * reasigna al grid (esto fuerza un repintado con el nuevo orden).
+     * Ordena la lista in situ (si hay comparador) y la reasigna al grid, que se
+     * repinta.
      */
     private void sortAndAssign(List<TextureInfo> list, CanvasTextureGrid grid,
             Comparator<TextureInfo> comparator) {
@@ -492,10 +469,7 @@ public class FXMLInicioController implements Initializable {
         grid.setItems(list);
     }
     
-    /**
-     * Crea un comparador de TextureInfo según el criterio. Devuelve null
-     * para "Sin ordenar".
-     */
+    /** @return Comparador por resolución, o null para {@link #SORT_DEFAULT} */
     private Comparator<TextureInfo> createComparator(String sortOrder) {
         if (sortOrder.equals(SORT_RES_ASC)) {
             return (a, b) -> Integer.compare(
@@ -512,9 +486,8 @@ public class FXMLInicioController implements Initializable {
     // ==================== VISUALIZACIÓN ====================
     
     /**
-     * Asigna las listas de texturas a sus grids correspondientes.
-     * Como el grid usa Canvas, esto NO crea nodos: el coste es solo
-     * O(N) para construir la displayList y un repaint.
+     * Asigna cada lista a su grid. No crea nodos: solo cuesta O(N) más un
+     * repaint, instantáneo incluso con miles de texturas.
      */
     private void displayTextures() {
         gridBlocks.setItems(blockTextures);
@@ -523,9 +496,7 @@ public class FXMLInicioController implements Initializable {
         gridEntity.setItems(entityTextures);
     }
     
-    /**
-     * Limpia el contenido de todos los grids y las listas en memoria.
-     */
+    /** Vacía los grids y las listas en memoria. */
     private void clearAllGrids() {
         gridBlocks.setItems(Collections.emptyList());
         gridItems.setItems(Collections.emptyList());
@@ -540,15 +511,12 @@ public class FXMLInicioController implements Initializable {
     
     // ==================== PROCESAMIENTO ====================
     
-    /**
-     * Procesa una textura individual (reduce su resolución).
-     */
+    /** Reduce la resolución de una textura en segundo plano. */
     private void processTexture(TextureInfo textureInfo) {
         textureService.processTextureAsync(textureInfo,
             () -> {
                 processedCount++;
-                // Buscar el grid que contiene la textura y marcar como procesada
-                // (esto la oculta del display y repinta).
+                // Marcarla en su grid la oculta y repinta
                 CanvasTextureGrid owner = findOwningGrid(textureInfo);
                 if (owner != null) {
                     owner.markProcessed(textureInfo);
@@ -568,10 +536,7 @@ public class FXMLInicioController implements Initializable {
         );
     }
     
-    /**
-     * Encuentra el grid que contiene una TextureInfo según las listas
-     * fuente del controller.
-     */
+    /** @return Grid cuya lista contiene la textura, o null */
     private CanvasTextureGrid findOwningGrid(TextureInfo t) {
         if (blockTextures != null && blockTextures.contains(t)) return gridBlocks;
         if (itemTextures != null && itemTextures.contains(t)) return gridItems;
@@ -667,10 +632,7 @@ public class FXMLInicioController implements Initializable {
     
     // ==================== LIMPIEZA ====================
     
-    /**
-     * Libera recursos al cerrar la aplicación.
-     * Debe llamarse desde la clase principal.
-     */
+    /** Libera recursos; la clase principal lo llama al cerrar. */
     public void shutdown() {
         if (textureService != null) {
             textureService.shutdown();

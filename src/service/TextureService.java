@@ -23,16 +23,11 @@ import util.Constants;
 import util.TGAHandler;
 
 /**
- * Servicio para cargar y gestionar texturas del sistema de archivos.
- * Implementa carga paralela para optimizar el rendimiento con muchos archivos.
- * 
- * Responsabilidades:
- * - Escanear directorios de texturas
- * - Cargar información de cada textura
- * - Detectar texturas asociadas MER (_mer, _mers) y normales (_normal, _n)
- * - Generar miniaturas para preview
- * 
- * Principio de Responsabilidad Única: Solo gestiona la carga de texturas.
+ * Carga (en paralelo) y procesa las texturas del resource pack:
+ * - Escanea los directorios de texturas
+ * - Lee las dimensiones de cada textura
+ * - Detecta sus texturas MER (_mer, _mers) y normales (_normal, _n)
+ * - Genera miniaturas de preview
  * 
  * @author vmonge
  */
@@ -40,29 +35,23 @@ public class TextureService {
     
     // ==================== CAMPOS ====================
     
-    /** Procesador de imágenes para redimensionamiento */
+    /** Procesador usado para redimensionar. */
     private final ImageProcessor imageProcessor;
     
-    /** Pool de hilos para carga paralela */
+    /** Pool de hilos para carga y procesamiento. */
     private final ExecutorService executorService;
     
-    /** Extensiones soportadas para búsqueda */
+    /** Extensiones de imagen buscadas. */
     private final List<String> supportedExtensions;
     
     // ==================== CONSTRUCTORES ====================
     
-    /**
-     * Crea un servicio con la configuración por defecto.
-     */
+    /** Configuración por defecto. */
     public TextureService() {
         this(new ImageProcessor());
     }
     
-    /**
-     * Crea un servicio con procesador personalizado.
-     * 
-     * @param imageProcessor Procesador de imágenes a usar
-     */
+    /** @param imageProcessor Procesador de imágenes a usar */
     public TextureService(ImageProcessor imageProcessor) {
         this.imageProcessor = imageProcessor;
         this.executorService = Executors.newFixedThreadPool(Constants.THREAD_POOL_SIZE);
@@ -72,12 +61,10 @@ public class TextureService {
     // ==================== CARGA DE TEXTURAS ====================
     
     /**
-     * Carga todas las texturas de bloques desde el directorio raíz.
-     * 
      * @param rootDirectory Directorio raíz del resource pack
-     * @param progressCallback Callback para reportar progreso (puede ser null)
-     * @return Lista de texturas de bloques encontradas
-     * @throws IOException Si hay error de lectura
+     * @param progressCallback Callback de progreso (puede ser null)
+     * @return Texturas de bloques encontradas
+     * @throws IOException Si falla la lectura
      */
     public List<TextureInfo> loadBlockTextures(File rootDirectory, 
             Consumer<String> progressCallback) throws IOException {
@@ -87,12 +74,10 @@ public class TextureService {
     }
     
     /**
-     * Carga todas las texturas de items desde el directorio raíz.
-     * 
      * @param rootDirectory Directorio raíz del resource pack
-     * @param progressCallback Callback para reportar progreso (puede ser null)
-     * @return Lista de texturas de items encontradas
-     * @throws IOException Si hay error de lectura
+     * @param progressCallback Callback de progreso (puede ser null)
+     * @return Texturas de items encontradas
+     * @throws IOException Si falla la lectura
      */
     public List<TextureInfo> loadItemTextures(File rootDirectory, 
             Consumer<String> progressCallback) throws IOException {
@@ -102,12 +87,10 @@ public class TextureService {
     }
     
     /**
-     * Carga todas las texturas de entorno desde el directorio raíz.
-     * 
      * @param rootDirectory Directorio raíz del resource pack
-     * @param progressCallback Callback para reportar progreso (puede ser null)
-     * @return Lista de texturas de entorno encontradas
-     * @throws IOException Si hay error de lectura
+     * @param progressCallback Callback de progreso (puede ser null)
+     * @return Texturas de entorno encontradas
+     * @throws IOException Si falla la lectura
      */
     public List<TextureInfo> loadEnvironmentTextures(File rootDirectory, 
             Consumer<String> progressCallback) throws IOException {
@@ -117,12 +100,10 @@ public class TextureService {
     }
     
     /**
-     * Carga todas las texturas de entidades desde el directorio raíz.
-     * 
      * @param rootDirectory Directorio raíz del resource pack
-     * @param progressCallback Callback para reportar progreso (puede ser null)
-     * @return Lista de texturas de entidades encontradas
-     * @throws IOException Si hay error de lectura
+     * @param progressCallback Callback de progreso (puede ser null)
+     * @return Texturas de entidades encontradas
+     * @throws IOException Si falla la lectura
      */
     public List<TextureInfo> loadEntityTextures(File rootDirectory, 
             Consumer<String> progressCallback) throws IOException {
@@ -132,13 +113,12 @@ public class TextureService {
     }
     
     /**
-     * Carga texturas de un directorio específico.
-     * Filtra automáticamente las texturas base (sin sufijos asociados MER o normal).
+     * Carga las texturas base (sin sufijo MER o normal) de un directorio.
      * 
      * @param directory Directorio a escanear
-     * @param progressCallback Callback para reportar progreso
-     * @return Lista de texturas encontradas
-     * @throws IOException Si hay error de lectura
+     * @param progressCallback Callback de progreso (puede ser null)
+     * @return Texturas encontradas
+     * @throws IOException Si falla la lectura
      */
     public List<TextureInfo> loadTexturesFromDirectory(File directory, 
             Consumer<String> progressCallback) throws IOException {
@@ -151,26 +131,21 @@ public class TextureService {
         
         reportProgress(progressCallback, "Scanning: " + directory.getAbsolutePath());
         
-        // Obtener todos los archivos de imagen
         List<File> allImageFiles = scanForImages(directory);
         reportProgress(progressCallback, "Found " + allImageFiles.size() + " image files");
         
-        // Crear mapa para búsqueda rápida de archivos asociados
+        // Mapa para localizar rápido los archivos asociados
         Map<String, File> fileMap = buildFileMap(allImageFiles);
         
-        // Filtrar solo texturas base (sin sufijos asociados MER o normal)
         List<File> baseFiles = filterBaseTextures(allImageFiles);
         reportProgress(progressCallback, "Base textures: " + baseFiles.size());
         
-        // Cargar información de cada textura en paralelo
         return loadTextureInfoParallel(baseFiles, fileMap, progressCallback);
     }
     
     /**
-     * Escanea recursivamente un directorio buscando archivos de imagen.
-     * 
      * @param directory Directorio a escanear
-     * @return Lista de archivos de imagen encontrados
+     * @return Imágenes soportadas encontradas recursivamente
      */
     private List<File> scanForImages(File directory) {
         List<File> images = new ArrayList<>();
@@ -179,10 +154,8 @@ public class TextureService {
     }
     
     /**
-     * Escaneo recursivo de directorios.
-     * 
      * @param directory Directorio actual
-     * @param accumulator Lista donde acumular resultados
+     * @param accumulator Lista donde se acumulan los resultados
      */
     private void scanDirectoryRecursive(File directory, List<File> accumulator) {
         File[] files = directory.listFiles();
@@ -197,12 +170,7 @@ public class TextureService {
         }
     }
     
-    /**
-     * Verifica si un archivo es una imagen soportada.
-     * 
-     * @param file Archivo a verificar
-     * @return true si es una imagen soportada
-     */
+    /** @return true si la extensión del archivo es soportada */
     private boolean isImageFile(File file) {
         String name = file.getName().toLowerCase();
         for (String ext : supportedExtensions) {
@@ -214,11 +182,8 @@ public class TextureService {
     }
     
     /**
-     * Construye un mapa de nombre base -> archivo para búsqueda rápida.
-     * La clave es la ruta relativa sin extensión.
-     * 
-     * @param files Lista de archivos
-     * @return Mapa de nombres a archivos
+     * @param files Archivos a indexar
+     * @return Mapa clave ({@link #getFileKey}) → archivo
      */
     private Map<String, File> buildFileMap(List<File> files) {
         Map<String, File> map = new HashMap<>();
@@ -229,12 +194,7 @@ public class TextureService {
         return map;
     }
     
-    /**
-     * Genera una clave única para un archivo (ruta sin extensión).
-     * 
-     * @param file Archivo
-     * @return Clave única
-     */
+    /** @return Clave única del archivo: ruta absoluta sin extensión */
     private String getFileKey(File file) {
         String path = file.getAbsolutePath();
         int dotIndex = path.lastIndexOf('.');
@@ -242,11 +202,8 @@ public class TextureService {
     }
     
     /**
-     * Filtra los archivos para obtener solo las texturas base.
-     * Excluye archivos con cualquiera de los sufijos asociados MER o normal.
-     * 
-     * @param files Lista completa de archivos
-     * @return Lista de texturas base
+     * @param files Todos los archivos
+     * @return Solo las texturas base (sin sufijo MER o normal)
      */
     private List<File> filterBaseTextures(List<File> files) {
         List<File> baseTextures = new ArrayList<>();
@@ -262,8 +219,6 @@ public class TextureService {
     }
 
     /**
-     * Indica si un nombre sin extensión corresponde a una textura asociada.
-     *
      * @param baseName Nombre del archivo sin extensión
      * @return true si termina en un sufijo MER o normal soportado
      */
@@ -281,12 +236,7 @@ public class TextureService {
         return false;
     }
     
-    /**
-     * Obtiene el nombre base de un archivo (sin extensión).
-     * 
-     * @param file Archivo
-     * @return Nombre sin extensión
-     */
+    /** @return Nombre del archivo sin extensión */
     private String getBaseName(File file) {
         String name = file.getName();
         int dotIndex = name.lastIndexOf('.');
@@ -294,12 +244,12 @@ public class TextureService {
     }
     
     /**
-     * Carga la información de texturas en paralelo.
+     * Carga en paralelo la información de las texturas.
      * 
      * @param baseFiles Archivos base a cargar
      * @param fileMap Mapa para buscar archivos asociados
      * @param progressCallback Callback de progreso
-     * @return Lista de TextureInfo cargadas
+     * @return Texturas cargadas (las que fallan se omiten)
      */
     private List<TextureInfo> loadTextureInfoParallel(List<File> baseFiles, 
             Map<String, File> fileMap, Consumer<String> progressCallback) {
@@ -307,13 +257,11 @@ public class TextureService {
         List<TextureInfo> result = new ArrayList<>();
         List<Future<TextureInfo>> futures = new ArrayList<>();
         
-        // Crear tareas para carga paralela
         for (File baseFile : baseFiles) {
             futures.add(executorService.submit(
                     new TextureLoadTask(baseFile, fileMap, progressCallback)));
         }
         
-        // Recolectar resultados
         int completed = 0;
         for (Future<TextureInfo> future : futures) {
             try {
@@ -328,7 +276,7 @@ public class TextureService {
                             String.format("Loaded %d/%d textures", completed, baseFiles.size()));
                 }
             } catch (Exception e) {
-                // Continuar con las demás si una falla
+                // Si una falla, se continúa con las demás
                 System.err.println("Error loading texture: " + e.getMessage());
             }
         }
@@ -339,9 +287,7 @@ public class TextureService {
     
     // ==================== TAREA DE CARGA ====================
     
-    /**
-     * Tarea para cargar una textura en un hilo separado.
-     */
+    /** Carga una textura en un hilo del pool. */
     private class TextureLoadTask implements Callable<TextureInfo> {
         
         private final File baseFile;
@@ -358,20 +304,16 @@ public class TextureService {
         @Override
         public TextureInfo call() throws Exception {
             try {
-                // Leer dimensiones de la imagen
                 int[] dimensions = readImageDimensions(baseFile);
                 if (dimensions == null) {
                     return null;
                 }
                 
-                // Crear TextureInfo
                 TextureInfo info = new TextureInfo(baseFile, dimensions[0], dimensions[1]);
                 
-                // Buscar texturas asociadas
                 String baseKey = getFileKey(baseFile);
                 findAssociatedTextures(info, baseKey, fileMap);
                 
-                // Generar miniatura
                 generateThumbnail(info);
                 
                 return info;
@@ -384,21 +326,19 @@ public class TextureService {
     }
     
     /**
-     * Lee las dimensiones de una imagen sin cargarla completamente en memoria.
-     * Para PNG usa ImageIO, para TGA lee el header directamente.
+     * Lee las dimensiones sin cargar la imagen: del header en TGA, con un
+     * ImageReader en el resto.
      * 
      * @param file Archivo de imagen
-     * @return Array [ancho, alto] o null si hay error
+     * @return [ancho, alto] o null si hay error
      */
     private int[] readImageDimensions(File file) {
         try {
             String extension = getExtension(file).toLowerCase();
             
             if (extension.equals(Constants.TGA_EXTENSION)) {
-                // Para TGA, leer dimensiones del header
                 return readTGADimensions(file);
             } else {
-                // Para PNG y otros, usar ImageIO
                 try (javax.imageio.stream.ImageInputStream iis = 
                         ImageIO.createImageInputStream(file)) {
                     
@@ -423,11 +363,9 @@ public class TextureService {
     }
     
     /**
-     * Lee las dimensiones de un archivo TGA desde su header.
-     * 
      * @param file Archivo TGA
-     * @return Array [ancho, alto]
-     * @throws IOException Si hay error de lectura
+     * @return [ancho, alto] leídos del header, o null si está incompleto
+     * @throws IOException Si falla la lectura
      */
     private int[] readTGADimensions(File file) throws IOException {
         try (FileInputStream fis = new FileInputStream(file)) {
@@ -442,10 +380,10 @@ public class TextureService {
     }
     
     /**
-     * Busca y asocia todas las variantes MER y de normales soportadas.
+     * Asocia a la textura todas sus variantes MER y de normales existentes.
      * 
-     * @param info TextureInfo a actualizar
-     * @param baseKey Clave base del archivo
+     * @param info Textura a actualizar
+     * @param baseKey Clave de la textura base
      * @param fileMap Mapa de archivos
      */
     private void findAssociatedTextures(TextureInfo info, String baseKey, 
@@ -467,17 +405,15 @@ public class TextureService {
     }
     
     /**
-     * Genera una imagen miniatura para preview en la UI.
+     * Genera la miniatura de preview.
      * 
-     * Optimización clave: en lugar de cargar la imagen completa en memoria
-     * (lo cual consume ~4 MB por una textura 1024x1024), se decodifica/reduce
-     * al tamaño objetivo definido en {@link Constants#THUMBNAIL_RENDER_SIZE}.
-     * Esto reduce el consumo de heap en ~25x para texturas grandes.
+     * En vez de mantener la imagen completa (~4 MB para 1024x1024), se reduce a
+     * {@link Constants#THUMBNAIL_RENDER_SIZE}: ~25x menos heap en texturas grandes.
      * 
-     * - PNG: usa el decodificador nativo de JavaFX con dimensiones objetivo,
-     *   evitando crear el BufferedImage completo intermedio.
-     * - TGA: como debemos leer el archivo nosotros, reducimos el BufferedImage
-     *   con el AreaResampler antes de convertirlo a Image JavaFX.
+     * - PNG: el decodificador de JavaFX decodifica directamente al tamaño
+     *   objetivo, sin BufferedImage intermedio completo.
+     * - TGA: se lee con TGAHandler y se reduce con AreaResampler antes de
+     *   convertirla a Image de JavaFX.
      * 
      * @param info TextureInfo a actualizar
      */
@@ -496,8 +432,8 @@ public class TextureService {
                 BufferedImage scaled = scaleToThumbnail(original, target);
                 thumbnail = SwingFXUtils.toFXImage(scaled, null);
             } else {
-                // Decodificación nativa al tamaño objetivo: NO carga la imagen
-                // completa en memoria. preserveRatio=true, smooth=false (pixel art).
+                // Decodifica al tamaño objetivo sin cargar la imagen completa.
+                // preserveRatio=true, smooth=false (pixel art).
                 String uri = file.toURI().toString();
                 thumbnail = new Image(uri, target, target, true, false, false);
                 if (thumbnail.isError()) {
@@ -513,12 +449,11 @@ public class TextureService {
     }
     
     /**
-     * Reduce un BufferedImage al tamaño de miniatura preservando el aspecto.
-     * Devuelve el original sin copia si ya cabe en el tamaño objetivo.
+     * Reduce la imagen al tamaño de miniatura preservando el aspecto.
      * 
      * @param original Imagen original
      * @param target Tamaño máximo (ancho o alto) en píxeles
-     * @return Imagen reducida (o el original si no requiere escala)
+     * @return Imagen reducida, o el original sin copiar si ya cabe
      */
     private BufferedImage scaleToThumbnail(BufferedImage original, int target) {
         int w = original.getWidth();
@@ -532,12 +467,7 @@ public class TextureService {
         return AreaResampler.resize(original, newW, newH);
     }
     
-    /**
-     * Obtiene la extensión de un archivo.
-     * 
-     * @param file Archivo
-     * @return Extensión con punto o cadena vacía
-     */
+    /** @return Extensión con punto, o "" si no tiene */
     private String getExtension(File file) {
         String name = file.getName();
         int dotIndex = name.lastIndexOf('.');
@@ -547,35 +477,33 @@ public class TextureService {
     // ==================== PROCESAMIENTO DE TEXTURAS ====================
     
     /**
-     * Procesa una textura: reduce resolución de la base y archivos asociados.
+     * Reduce la resolución de la textura base y de sus mapas asociados, y la
+     * marca como procesada.
      * 
-     * @param textureInfo Información de la textura a procesar
-     * @throws IOException Si hay error de procesamiento
+     * @param textureInfo Textura a procesar
+     * @throws IOException Si falla el procesamiento
      */
     public void processTexture(TextureInfo textureInfo) throws IOException {
-        // Procesar archivo base
         imageProcessor.processFile(textureInfo.getBaseFile());
         
-        // Procesar todas las variantes MER asociadas
         for (File merFile : textureInfo.getMerFiles()) {
             imageProcessor.processDataMap(merFile);
         }
         
-        // Procesar todas las variantes de normales asociadas
         for (File normalFile : textureInfo.getNormalFiles()) {
             imageProcessor.processDataMap(normalFile);
         }
         
-        // Marcar como procesada
         textureInfo.setProcessed(true);
     }
     
     /**
-     * Procesa una textura de forma asíncrona.
+     * Procesa una textura en segundo plano. Los callbacks se ejecutan en el
+     * hilo de JavaFX.
      * 
      * @param textureInfo Textura a procesar
-     * @param onSuccess Callback en caso de éxito (ejecutado en hilo de JavaFX)
-     * @param onError Callback en caso de error (ejecutado en hilo de JavaFX)
+     * @param onSuccess Callback de éxito (puede ser null)
+     * @param onError Callback de error (puede ser null)
      */
     public void processTextureAsync(TextureInfo textureInfo, 
             Runnable onSuccess, Consumer<Exception> onError) {
@@ -584,12 +512,10 @@ public class TextureService {
             try {
                 processTexture(textureInfo);
                 
-                // Notificar éxito en el hilo de JavaFX
                 if (onSuccess != null) {
                     Platform.runLater(onSuccess);
                 }
             } catch (Exception e) {
-                // Notificar error en el hilo de JavaFX
                 if (onError != null) {
                     Platform.runLater(() -> onError.accept(e));
                 }
@@ -600,7 +526,7 @@ public class TextureService {
     // ==================== UTILIDADES ====================
     
     /**
-     * Reporta progreso a través del callback si está disponible.
+     * Envía el mensaje al callback en el hilo de JavaFX.
      * 
      * @param callback Callback de progreso (puede ser null)
      * @param message Mensaje a reportar
@@ -612,10 +538,8 @@ public class TextureService {
     }
     
     /**
-     * Verifica si un directorio contiene texturas válidas.
-     * 
      * @param rootDirectory Directorio raíz a verificar
-     * @return true si tiene subdirectorios de texturas
+     * @return true si contiene al menos un subdirectorio de texturas conocido
      */
     public boolean hasValidTextureDirectories(File rootDirectory) {
         File blocksDir = new File(rootDirectory, Constants.BLOCKS_PATH);
@@ -626,17 +550,12 @@ public class TextureService {
                environmentDir.exists() || entityDir.exists();
     }
     
-    /**
-     * Libera recursos del servicio.
-     * Debe llamarse al cerrar la aplicación.
-     */
+    /** Libera el pool de hilos; llamar al cerrar la aplicación. */
     public void shutdown() {
         executorService.shutdown();
     }
     
-    /**
-     * @return Procesador de imágenes utilizado
-     */
+    /** @return Procesador de imágenes */
     public ImageProcessor getImageProcessor() {
         return imageProcessor;
     }

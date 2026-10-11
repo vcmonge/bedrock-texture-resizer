@@ -1,18 +1,16 @@
 package util;
 
 /**
- * Modos de procesamiento del canal alfa durante el redimensionamiento.
+ * Modos de tratamiento del canal alfa al redimensionar.
  * 
  * <ul>
- *   <li>{@link #ADAPTIVE} — Decide por píxel: umbral binario donde la zona
- *       fuente es un recorte duro (solo alfa 0 o 255) y alfa continuo donde
- *       hay opacidad parcial real. Sirve para cualquier textura.</li>
- *   <li>{@link #BINARY} — Umbral binario: alfa ≥ 0.5 → 255 (opaco),
- *       alfa &lt; 0.5 → 0 (transparente). Ideal para texturas con
- *       transparencia de recorte (hojas, flores, etc.).</li>
- *   <li>{@link #CONTINUOUS} — Preserva el valor real del alfa (0–255).
- *       Ideal para texturas con opacidad parcial (hielo, agua,
- *       cristal, vidrio, etc.).</li>
+ *   <li>{@link #ADAPTIVE} — Por píxel: umbral binario donde la fuente es un
+ *       recorte duro (alfa 0 o 255) y alfa continuo donde hay opacidad
+ *       parcial. Válido para cualquier textura.</li>
+ *   <li>{@link #BINARY} — Alfa ≥ 0.5 → 255, alfa &lt; 0.5 → 0. Para
+ *       texturas de recorte (hojas, flores).</li>
+ *   <li>{@link #CONTINUOUS} — Conserva el alfa real (0–255). Para texturas
+ *       con opacidad parcial (hielo, agua, vidrio).</li>
  * </ul>
  * 
  * @author vmonge
@@ -20,44 +18,33 @@ package util;
 public enum AlphaMode {
     
     /**
-     * Alfa adaptativo: cada píxel destino cuyos píxeles fuente tienen todos
-     * alfa 0 o 255 se resuelve con el umbral de {@link #BINARY}, y el resto con
-     * {@link #CONTINUOUS}. Mantiene nítidos los bordes de recorte sin perder la
-     * translucidez de hielo, agua o vidrio tintado.
+     * Si todos los píxeles fuente de un píxel destino tienen alfa 0 o 255, se
+     * aplica {@link #BINARY}; si no, {@link #CONTINUOUS}. Bordes de recorte
+     * nítidos sin perder la translucidez de hielo, agua o vidrio tintado.
      */
     ADAPTIVE("Adaptive (Default Mode)"),
     
-    /**
-     * Alfa binario: cada píxel resultante es 100 % opaco o 100 % transparente.
-     * Comportamiento original del algoritmo.
-     */
+    /** Cada píxel resultante es totalmente opaco o transparente (comportamiento original). */
     BINARY("Binary (hard cut-out)"),
     
-    /**
-     * Alfa continuo: preserva los valores intermedios de transparencia.
-     * Produce resultados equivalentes a Photoshop en texturas semitransparentes.
-     */
+    /** Conserva la transparencia intermedia; equivale a Photoshop en texturas semitransparentes. */
     CONTINUOUS("Continuous (preserve opacity)");
     
     // ==================== CAMPOS ====================
     
-    /** Nombre legible para mostrar en la UI */
+    /** Nombre mostrado en la UI. */
     private final String displayName;
     
     // ==================== CONSTRUCTOR ====================
     
-    /**
-     * @param displayName Nombre para mostrar en la interfaz
-     */
+    /** @param displayName Nombre mostrado en la UI */
     AlphaMode(String displayName) {
         this.displayName = displayName;
     }
     
     // ==================== MÉTODOS ====================
     
-    /**
-     * @return Nombre legible para la interfaz
-     */
+    /** @return Nombre mostrado en la UI */
     public String getDisplayName() {
         return displayName;
     }

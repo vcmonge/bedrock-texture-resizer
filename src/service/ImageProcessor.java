@@ -10,16 +10,11 @@ import util.ResizeAlgorithm;
 import util.TGAHandler;
 
 /**
- * Servicio para procesar y redimensionar imágenes.
- * Despacha al algoritmo seleccionado mediante un switch sobre {@link ResizeAlgorithm}.
+ * Lee, redimensiona y guarda imágenes PNG y TGA preservando el canal alfa
+ * (transparencia de items, datos extra en TGA como mapas de altura o máscaras).
  * 
- * Maneja imágenes PNG y TGA, preservando el canal alpha en ambos casos.
- * El canal alpha es crítico para:
- * - Transparencia en items
- * - Información adicional en texturas TGA (mapas de altura, máscaras, etc.)
- * 
- * Para añadir un nuevo algoritmo, implementar su lógica en una clase separada
- * y agregar el case correspondiente en {@link #resize(BufferedImage)}.
+ * Para añadir un algoritmo, implementarlo en una clase aparte y añadir su case
+ * en {@link #resize(BufferedImage)}.
  * 
  * @author vmonge
  */
@@ -27,65 +22,54 @@ public class ImageProcessor {
     
     // ==================== CAMPOS ====================
     
-    /** Factor de escala para reducir la resolución */
+    /** Divisor de la resolución. */
     private final int scaleFactor;
     
-    /** Algoritmo de redimensionamiento a usar */
+    /** Algoritmo de redimensionamiento. */
     private final ResizeAlgorithm algorithm;
     
-    /** Si true, los TGA se procesan con RGB y Alpha como canales independientes */
+    /** Si true, los TGA se procesan con RGB y alfa independientes. */
     private final boolean tgaIndependentAlpha;
     
-    /** Modo de procesamiento del canal alfa (adaptativo, binario o continuo) */
+    /** Modo de alfa (adaptativo, binario o continuo). */
     private final AlphaMode alphaMode;
     
     // ==================== CONSTRUCTORES ====================
     
-    /**
-     * Crea un procesador con la configuración por defecto.
-     */
+    /** Configuración por defecto. */
     public ImageProcessor() {
         this(Constants.DEFAULT_SCALE_FACTOR, Constants.DEFAULT_ALGORITHM);
     }
     
-    /**
-     * Crea un procesador con factor de escala personalizado y algoritmo por defecto.
-     * 
-     * @param scaleFactor Factor de división de resolución (2 = mitad, 4 = cuarto, etc.)
-     */
+    /** @param scaleFactor Divisor de la resolución (2 = mitad, 4 = cuarto...) */
     public ImageProcessor(int scaleFactor) {
         this(scaleFactor, Constants.DEFAULT_ALGORITHM);
     }
     
     /**
-     * Crea un procesador con configuración completa personalizada.
-     * 
-     * @param scaleFactor Factor de división de resolución
-     * @param algorithm Algoritmo de redimensionamiento a usar
+     * @param scaleFactor Divisor de la resolución
+     * @param algorithm Algoritmo de redimensionamiento
      */
     public ImageProcessor(int scaleFactor, ResizeAlgorithm algorithm) {
         this(scaleFactor, algorithm, false);
     }
     
     /**
-     * Crea un procesador con configuración completa y control de TGA.
      * Usa el modo de alfa por defecto ({@link Constants#DEFAULT_ALPHA_MODE}).
      * 
-     * @param scaleFactor Factor de división de resolución
-     * @param algorithm Algoritmo de redimensionamiento a usar
-     * @param tgaIndependentAlpha Si true, los TGA se procesan con canales RGB y Alpha independientes
+     * @param scaleFactor Divisor de la resolución
+     * @param algorithm Algoritmo de redimensionamiento
+     * @param tgaIndependentAlpha Si true, los TGA se procesan con RGB y alfa independientes
      */
     public ImageProcessor(int scaleFactor, ResizeAlgorithm algorithm, boolean tgaIndependentAlpha) {
         this(scaleFactor, algorithm, tgaIndependentAlpha, Constants.DEFAULT_ALPHA_MODE);
     }
     
     /**
-     * Crea un procesador con configuración completa, control de TGA y modo de alfa.
-     * 
-     * @param scaleFactor Factor de división de resolución
-     * @param algorithm Algoritmo de redimensionamiento a usar
-     * @param tgaIndependentAlpha Si true, los TGA se procesan con canales RGB y Alpha independientes
-     * @param alphaMode Modo de procesamiento del canal alfa (adaptativo, binario o continuo)
+     * @param scaleFactor Divisor de la resolución
+     * @param algorithm Algoritmo de redimensionamiento
+     * @param tgaIndependentAlpha Si true, los TGA se procesan con RGB y alfa independientes
+     * @param alphaMode Modo de alfa (adaptativo, binario o continuo)
      */
     public ImageProcessor(int scaleFactor, ResizeAlgorithm algorithm, 
             boolean tgaIndependentAlpha, AlphaMode alphaMode) {
@@ -107,11 +91,10 @@ public class ImageProcessor {
     // ==================== MÉTODOS DE PROCESAMIENTO ====================
     
     /**
-     * Redimensiona una imagen usando el algoritmo configurado.
-     * Preserva el canal alpha si la imagen lo tiene.
+     * Redimensiona con el algoritmo configurado, preservando el alfa.
      * 
-     * @param original Imagen original a redimensionar
-     * @return Nueva imagen redimensionada
+     * @param original Imagen original
+     * @return Nueva imagen (copia si las dimensiones no cambian)
      */
     public BufferedImage resize(BufferedImage original) {
         if (original == null) {
@@ -139,9 +122,7 @@ public class ImageProcessor {
     
     // ==================== UTILIDADES INTERNAS ====================
     
-    /**
-     * Crea una copia de la imagen.
-     */
+    /** Copia la imagen en TYPE_INT_ARGB. */
     private BufferedImage copyImage(BufferedImage original) {
         int w = original.getWidth();
         int h = original.getHeight();
@@ -154,26 +135,25 @@ public class ImageProcessor {
     // ==================== MÉTODOS DE ARCHIVO ====================
     
     /**
-     * Procesa un archivo de imagen: lee, redimensiona y guarda.
-     * Detecta automáticamente el formato (PNG o TGA).
+     * Lee, redimensiona y guarda una imagen PNG o TGA (según la extensión).
      * 
      * @param inputFile Archivo de entrada
      * @param outputFile Archivo de salida (puede ser el mismo para sobrescribir)
-     * @throws IOException Si hay error de lectura/escritura
+     * @throws IOException Si falla la lectura o escritura
      */
     public void processFile(File inputFile, File outputFile) throws IOException {
         processFile(inputFile, outputFile, false);
     }
     
     /**
-     * Procesa un mapa de datos asociado (MER/MERS o normal) sobrescribiendo el original.
+     * Procesa in situ un mapa de datos asociado (MER/MERS o normal).
      * 
-     * Sus canales son datos, no color + transparencia (en un {@code _mers} el alfa
-     * es subsurface), así que los cuatro canales se promedian de forma independiente
-     * y con alfa continuo, sin importar el modo de alfa elegido para las texturas.
+     * Sus canales son datos, no color + transparencia (en un {@code _mers} el
+     * alfa es subsurface), así que los cuatro se promedian por separado con alfa
+     * continuo, sea cual sea el modo de alfa elegido.
      * 
      * @param file Mapa a procesar
-     * @throws IOException Si hay error de lectura/escritura
+     * @throws IOException Si falla la lectura o escritura
      */
     public void processDataMap(File file) throws IOException {
         processFile(file, file, true);
@@ -217,21 +197,19 @@ public class ImageProcessor {
     }
     
     /**
-     * Procesa un archivo sobrescribiendo el original.
+     * Procesa un archivo sobrescribiéndolo.
      * 
      * @param file Archivo a procesar
-     * @throws IOException Si hay error de lectura/escritura
+     * @throws IOException Si falla la lectura o escritura
      */
     public void processFile(File file) throws IOException {
         processFile(file, file);
     }
     
     /**
-     * Lee una imagen de archivo.
-     * 
-     * @param file Archivo a leer
-     * @return BufferedImage cargada
-     * @throws IOException Si hay error de lectura
+     * @param file Imagen PNG o TGA
+     * @return Imagen cargada
+     * @throws IOException Si falla la lectura
      */
     public BufferedImage readImage(File file) throws IOException {
         String extension = getExtension(file).toLowerCase();
@@ -244,11 +222,11 @@ public class ImageProcessor {
     }
     
     /**
-     * Guarda una imagen en archivo.
+     * Guarda como TGA o PNG según la extensión del destino.
      * 
      * @param image Imagen a guardar
      * @param file Archivo de destino
-     * @throws IOException Si hay error de escritura
+     * @throws IOException Si falla la escritura
      */
     public void writeImage(BufferedImage image, File file) throws IOException {
         String extension = getExtension(file).toLowerCase();
@@ -262,42 +240,32 @@ public class ImageProcessor {
     
     // ==================== MÉTODOS DE UTILIDAD ====================
     
-    /**
-     * Obtiene la extensión de un archivo.
-     */
+    /** @return Extensión con el punto, o "" si no tiene */
     private String getExtension(File file) {
         String name = file.getName();
         int dotIndex = name.lastIndexOf('.');
         return dotIndex > 0 ? name.substring(dotIndex) : "";
     }
     
-    /**
-     * @return Factor de escala actual
-     */
+    /** @return Factor de escala actual */
     public int getScaleFactor() {
         return scaleFactor;
     }
     
-    /**
-     * @return Algoritmo de redimensionamiento actual
-     */
+    /** @return Algoritmo actual */
     public ResizeAlgorithm getAlgorithm() {
         return algorithm;
     }
     
-    /**
-     * @return Modo de procesamiento del canal alfa
-     */
+    /** @return Modo de alfa */
     public AlphaMode getAlphaMode() {
         return alphaMode;
     }
     
     /**
-     * Calcula las dimensiones resultantes de redimensionar una imagen.
-     * 
      * @param originalWidth Ancho original
      * @param originalHeight Alto original
-     * @return Array de 2 elementos: [nuevoAncho, nuevoAlto]
+     * @return [nuevoAncho, nuevoAlto], cada uno ≥ 1
      */
     public int[] calculateNewDimensions(int originalWidth, int originalHeight) {
         return new int[] {

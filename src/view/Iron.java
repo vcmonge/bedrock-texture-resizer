@@ -9,47 +9,35 @@ import javafx.stage.Stage;
 import controller.FXMLInicioController;
 
 /**
- * Clase principal de la aplicación Bedrock Texture Resizer.
+ * Clase principal de Bedrock Texture Resizer: reduce manualmente, textura a
+ * textura, la resolución de las texturas de un resource pack.
  * 
- * Esta aplicación permite reducir la resolución de texturas de resource packs
- * de videojuegos de manera manual, textura por textura.
- * 
- * Características:
- * - Carga texturas desde carpetas textures/blocks y textures/items
- * - Soporta formatos PNG y TGA (con canal alpha)
- * - Detecta texturas asociadas MER (_mer, _mers) y normales (_normal, _n)
- * - Usa algoritmo nearest neighbor para preservar pixel art
- * - Interfaz organizada en pestañas por tipo de textura
+ * - Carga texturas de textures/blocks, items, environment y entity
+ * - Soporta PNG y TGA (con canal alfa)
+ * - Detecta texturas MER (_mer, _mers) y normales (_normal, _n) asociadas
+ * - Redimensiona con Area Resampling
+ * - Una pestaña por tipo de textura
  * 
  * @author vmonge
  * @version 1.2.0
  */
 public class Iron extends Application {
     
-    /** Controlador principal para gestionar cierre */
+    /** Controlador principal, necesario para liberar recursos al cerrar. */
     private FXMLInicioController controller;
     
-    /**
-     * Punto de entrada de la aplicación JavaFX.
-     * Configura y muestra la ventana principal.
-     * 
-     * @param stage Stage principal de la aplicación
-     */
+    /** Configura y muestra la ventana principal. */
     @Override
     public void start(Stage stage) {
         try {
-            // Cargar FXML
             FXMLLoader loader = new FXMLLoader(getClass().getResource("/view/FXMLInicio.fxml"));
             Parent vista = loader.load();
             DesignTokens.install(vista);
             
-            // Obtener referencia al controlador
             controller = loader.getController();
             
-            // Configurar escena
             Scene escena = new Scene(vista);
             
-            // Configurar stage
             stage.setScene(escena);
             stage.setTitle("Bedrock Texture Resizer");
             stage.setMinWidth(1200);
@@ -57,14 +45,12 @@ public class Iron extends Application {
             stage.setWidth(1440);
             stage.setHeight(800);
             
-            // Manejar cierre de aplicación
             stage.setOnCloseRequest(event -> {
                 if (controller != null) {
                     controller.shutdown();
                 }
             });
             
-            // Mostrar ventana
             stage.show();
             
         } catch (IOException e) {
@@ -73,10 +59,7 @@ public class Iron extends Application {
         }
     }
     
-    /**
-     * Método llamado al cerrar la aplicación.
-     * Libera recursos del controlador.
-     */
+    /** Libera los recursos del controlador al cerrar. */
     @Override
     public void stop() {
         if (controller != null) {
@@ -84,11 +67,7 @@ public class Iron extends Application {
         }
     }
 
-    /**
-     * Punto de entrada principal de la aplicación.
-     * 
-     * @param args Argumentos de línea de comandos (no utilizados)
-     */
+    /** @param args Argumentos de línea de comandos (no usados) */
     public static void main(String[] args) {
         launch(args);
     }

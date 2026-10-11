@@ -24,21 +24,17 @@ import javafx.scene.text.TextAlignment;
 import model.TextureInfo;
 
 /**
- * Componente de grid virtualizado que dibuja todas las texturas en un
- * único Canvas, en lugar de crear un nodo por cada una.
+ * Grid virtualizado que dibuja todas las texturas en un único Canvas en vez
+ * de crear nodos por textura.
  *
- * Por qué: con miles de texturas, el scene graph de JavaFX (con ~7 nodos
- * por TextureCard) llega a decenas de miles de nodos, lo que vuelve toda
- * la app lenta (CSS pass, layout, pickResult, cache de Prism). Aquí
- * reducimos el grid a 1 solo nodo (el Canvas) y dibujamos directo con
- * GraphicsContext. El scene graph se libera y todos los demás controles
- * (botones, combos) responden al instante.
+ * Con miles de texturas, ~7 nodos por TextureCard suman decenas de miles de
+ * nodos y ralentizan toda la app (CSS, layout, picking, cache de Prism). Con
+ * un solo nodo dibujado vía GraphicsContext, el resto de controles responde
+ * al instante.
  *
- * El Canvas tiene tamaño igual al viewport del ScrollPane (no del
- * contenido total), evitando límites de tamaño máximo de Canvas en GPU.
- * Al hacer scroll, el Canvas se reposiciona dentro del Pane padre para
- * "flotar" siempre sobre el área visible, y se redibuja con la franja
- * de cards correspondiente.
+ * El Canvas mide lo que el viewport del ScrollPane, no el contenido total,
+ * para no superar el tamaño máximo de Canvas en GPU. Al hacer scroll se
+ * reposiciona sobre el área visible y redibuja la franja de cards que toca.
  *
  * @author vmonge
  */
@@ -64,10 +60,10 @@ public class CanvasTextureGrid extends Pane {
     /** Tamaño visible de la miniatura dentro de la card. */
     private static final double THUMB_SIZE = 104;
     
-    /** Alto del "botón" Reducir dentro de la card. */
+    /** Alto del botón Resize. */
     private static final double BUTTON_H = 32;
     
-    /** Margen interno entre los elementos de la card. */
+    /** Margen interno de la card. */
     private static final double CARD_PAD = 10;
 
     /** Editorial card radius. */
@@ -113,40 +109,40 @@ public class CanvasTextureGrid extends Pane {
     
     // ==================== ESTADO ====================
     
-    /** Canvas único donde se dibuja todo el grid. */
+    /** Canvas donde se dibuja todo el grid. */
     private final Canvas canvas = new Canvas();
     
-    /** Lista completa de items (incluye procesados). */
+    /** Todos los items, incluidos los procesados. */
     private List<TextureInfo> items = Collections.emptyList();
     
-    /** Lista filtrada (sin procesados) usada para layout y pintado. */
+    /** Items sin procesar: los que se colocan y pintan. */
     private List<TextureInfo> displayList = Collections.emptyList();
     
-    /** Conjunto de texturas seleccionadas (espejo de TextureInfo.selected). */
+    /** Texturas seleccionadas (refleja TextureInfo.selected). */
     private final Set<TextureInfo> selectedSet = new LinkedHashSet<>();
     
-    /** Item bajo el cursor del mouse para feedback visual. */
+    /** Item bajo el cursor. */
     private TextureInfo hoveredItem = null;
     
-    /** Item cuyo botón "Reducir" está hovered (para color del botón). */
+    /** Índice del item con el cursor sobre su botón, o -1. */
     private int hoveredButtonIndex = -1;
     
-    /** Número de columnas actual según el ancho del viewport. */
+    /** Columnas según el ancho del viewport. */
     private int cols = 1;
     
     /** Alto de fila (CARD_H + V_GAP). */
     private static final double ROW_H = CARD_H + V_GAP;
     
-    /** ScrollPane padre, asociado vía attachToScrollPane. */
+    /** ScrollPane padre (ver attachToScrollPane). */
     private ScrollPane scrollPane;
     
-    /** Propiedad observable que indica si el modo selección está activo. */
+    /** Modo selección activo. */
     private BooleanProperty selectionModeActive = new SimpleBooleanProperty(false);
     
-    /** Callback al hacer click en el botón "Reducir" de una card. */
+    /** Se invoca al pulsar el botón Resize de una card. */
     private Consumer<TextureInfo> onProcessCallback;
     
-    /** Callback al cambiar la selección de cualquier card. */
+    /** Se invoca al cambiar la selección. */
     private Runnable onSelectionChangedCallback;
     
     // ==================== CONSTRUCTOR ====================
@@ -156,8 +152,7 @@ public class CanvasTextureGrid extends Pane {
         getChildren().add(canvas);
         setMinHeight(0);
         
-        // Repintar al redimensionar el ancho del Pane: cambia el número de
-        // columnas y por tanto la altura total y la disposición.
+        // El ancho determina columnas, altura total y disposición
         widthProperty().addListener((obs, o, n) -> {
             recalcLayout();
             requestRepaint();
@@ -177,8 +172,8 @@ public class CanvasTextureGrid extends Pane {
     // ==================== API PÚBLICA ====================
     
     /**
-     * Asocia el grid al ScrollPane padre. Se necesita porque el grid
-     * dibuja solo la franja visible, basada en el viewport y el vvalue.
+     * Asocia el ScrollPane padre, necesario para dibujar solo la franja
+     * visible (según viewport y vvalue).
      * 
      * @param sp ScrollPane que contiene este grid como content
      */
@@ -193,14 +188,13 @@ public class CanvasTextureGrid extends Pane {
     }
     
     /**
-     * Configura el modo de selección observable. El grid lee esta
-     * propiedad para decidir si los clicks alternan selección o no.
+     * Enlaza el modo selección: si está activo, los clics alternan la
+     * selección; al desactivarlo se vacía.
      * 
-     * @param prop Propiedad booleana del controller
+     * @param prop Propiedad del controller
      */
     public void setSelectionModeActiveProperty(BooleanProperty prop) {
         this.selectionModeActive = prop;
-        // Si se desactiva el modo selección, vaciamos selección visual.
         prop.addListener((obs, o, n) -> {
             if (!n) {
                 clearSelection();
@@ -210,24 +204,20 @@ public class CanvasTextureGrid extends Pane {
         });
     }
     
-    /**
-     * @param cb Callback ejecutado al hacer click en el botón "Reducir" de una card
-     */
+    /** @param cb Se invoca al pulsar el botón Resize de una card */
     public void setOnProcessCallback(Consumer<TextureInfo> cb) {
         this.onProcessCallback = cb;
     }
     
-    /**
-     * @param cb Callback ejecutado al cambiar la selección
-     */
+    /** @param cb Se invoca al cambiar la selección */
     public void setOnSelectionChangedCallback(Runnable cb) {
         this.onSelectionChangedCallback = cb;
     }
     
     /**
-     * Asigna la lista de texturas a mostrar. Recalcula el layout y repinta.
+     * Asigna las texturas a mostrar, recalcula el layout y repinta.
      * 
-     * @param list Nueva lista de TextureInfo (puede ser null)
+     * @param list Texturas (puede ser null)
      */
     public void setItems(List<TextureInfo> list) {
         this.items = list != null ? list : Collections.emptyList();
@@ -236,16 +226,12 @@ public class CanvasTextureGrid extends Pane {
         requestRepaint();
     }
     
-    /**
-     * @return Conjunto inmutable de texturas actualmente seleccionadas
-     */
+    /** @return Copia de las texturas seleccionadas */
     public Set<TextureInfo> getSelectedItems() {
         return new LinkedHashSet<>(selectedSet);
     }
     
-    /**
-     * @return Cantidad de items seleccionados
-     */
+    /** @return Número de items seleccionados */
     public int getSelectedCount() {
         return selectedSet.size();
     }
@@ -253,7 +239,7 @@ public class CanvasTextureGrid extends Pane {
     /**
      * Selecciona o deselecciona todos los items visibles (no procesados).
      * 
-     * @param selected true para seleccionar todos, false para deseleccionar
+     * @param selected true para seleccionar, false para deseleccionar
      */
     public void selectAllVisible(boolean selected) {
         boolean changed = false;
@@ -281,9 +267,9 @@ public class CanvasTextureGrid extends Pane {
     }
     
     /**
-     * Marca una textura como procesada y la oculta del grid.
+     * Marca la textura como procesada y la oculta.
      * 
-     * @param t Textura a marcar
+     * @param t Textura procesada
      */
     public void markProcessed(TextureInfo t) {
         t.setProcessed(true);
@@ -295,9 +281,7 @@ public class CanvasTextureGrid extends Pane {
         requestRepaint();
     }
     
-    /**
-     * Solicita un repintado del Canvas (p. ej. al cambiar contadores externos).
-     */
+    /** Solicita un repintado (p. ej. al cambiar contadores externos). */
     public void refresh() {
         requestRepaint();
     }
@@ -305,8 +289,8 @@ public class CanvasTextureGrid extends Pane {
     // ==================== LAYOUT ====================
     
     /**
-     * Recalcula columnas, alto preferido del Pane y tamaño del Canvas
-     * según el ancho disponible y la cantidad de items visibles.
+     * Recalcula columnas, alto del Pane y tamaño del Canvas según el ancho
+     * disponible y los items visibles.
      */
     private void recalcLayout() {
         double width = getWidth();
@@ -321,7 +305,7 @@ public class CanvasTextureGrid extends Pane {
         }
         
         double inner = Math.max(0, width - 2 * PADDING);
-        // Calcula cuántas cards caben con el gap entre ellas.
+        // Cards que caben contando el gap
         cols = Math.max(1, (int) Math.floor((inner + H_GAP) / (CARD_W + H_GAP)));
         
         int n = displayList.size();
@@ -330,7 +314,7 @@ public class CanvasTextureGrid extends Pane {
         setPrefHeight(totalH);
         setMinHeight(totalH);
         
-        // Canvas del tamaño del viewport (no del total): se mueve con el scroll.
+        // Canvas del tamaño del viewport, no del total: se mueve con el scroll
         double viewportW = width;
         double viewportH = (scrollPane != null && scrollPane.getViewportBounds() != null)
                 ? scrollPane.getViewportBounds().getHeight()
@@ -343,16 +327,14 @@ public class CanvasTextureGrid extends Pane {
     
     @Override
     protected void layoutChildren() {
-        // No invocamos super: queremos posicionar el Canvas manualmente.
+        // Sin super: el Canvas se posiciona a mano
         positionCanvas();
     }
     
     /**
-     * Reposiciona el Canvas dentro del Pane para que su rectángulo
-     * coincida con la zona visible del ScrollPane. Como el ScrollPane
-     * traslada el contenido por -vvalue*(contentH-viewportH), poner
-     * layoutY del Canvas en vvalue*(contentH-viewportH) lo deja
-     * siempre visible en el centro del viewport.
+     * Hace coincidir el Canvas con la zona visible del ScrollPane: este
+     * desplaza el contenido -vvalue*(contentH-viewportH), así que poner
+     * layoutY = vvalue*(contentH-viewportH) mantiene el Canvas en el viewport.
      */
     private void positionCanvas() {
         if (scrollPane == null) {
@@ -372,25 +354,25 @@ public class CanvasTextureGrid extends Pane {
         canvas.setLayoutY(offsetY);
     }
     
-    /** Filtra items procesados, manteniendo el orden de la lista original. */
+    /** Excluye los items procesados, conservando el orden. */
     private void rebuildDisplayList() {
         List<TextureInfo> filtered = new ArrayList<>(items.size());
         for (TextureInfo t : items) {
             if (!t.isProcessed()) filtered.add(t);
         }
         this.displayList = filtered;
-        // Limpiar items seleccionados que ya no están visibles.
+        // Quitar de la selección los que ya no se ven
         selectedSet.retainAll(filtered);
     }
     
     // ==================== REPAINT ====================
     
-    /** Estado de petición de repaint para coalescer múltiples cambios en un frame. */
+    /** Hay un repaint pendiente (agrupa varios cambios en un frame). */
     private boolean repaintRequested = false;
     
     /**
-     * Solicita un repaint en el siguiente pulso de animación. Multiples
-     * llamadas en el mismo frame se coalescen en una sola.
+     * Programa un repaint en el siguiente pulso; las llamadas del mismo frame
+     * se agrupan en una.
      */
     private void requestRepaint() {
         if (repaintRequested) return;
@@ -401,9 +383,7 @@ public class CanvasTextureGrid extends Pane {
         });
     }
     
-    /**
-     * Pinta la franja visible del grid sobre el Canvas.
-     */
+    /** Pinta la franja visible del grid. */
     private void paint() {
         positionCanvas();
         
@@ -412,17 +392,16 @@ public class CanvasTextureGrid extends Pane {
         if (viewportW <= 0 || viewportH <= 0) return;
         
         GraphicsContext gc = canvas.getGraphicsContext2D();
-        // Nota: GraphicsContext.setImageSmoothing(false) solo existe en
-        // JavaFX 12+; en JavaFX 8 las miniaturas ya se decodifican con
-        // smooth=false en TextureService.generateThumbnail(), preservando
-        // el aspecto pixel-art al hacer drawImage.
+        // setImageSmoothing(false) solo existe desde JavaFX 12; las miniaturas
+        // ya se decodifican con smooth=false en TextureService.generateThumbnail(),
+        // así que drawImage conserva el aspecto pixel art.
         gc.clearRect(0, 0, viewportW, viewportH);
         
         if (displayList.isEmpty() || cols <= 0) return;
         
         double offsetY = canvas.getLayoutY();
         
-        // Determinar filas que intersectan el viewport.
+        // Filas que intersectan el viewport
         int firstRow = Math.max(0, (int) Math.floor((offsetY - PADDING) / ROW_H));
         int lastRow = (int) Math.ceil((offsetY + viewportH - PADDING) / ROW_H);
         
@@ -446,9 +425,7 @@ public class CanvasTextureGrid extends Pane {
         }
     }
     
-    /**
-     * Dibuja una card individual.
-     */
+    /** Dibuja una card. */
     private void drawCard(GraphicsContext gc, TextureInfo t, int idx, double x, double y) {
         boolean isHover = (t == hoveredItem);
         boolean isSelected = selectedSet.contains(t);
@@ -490,7 +467,7 @@ public class CanvasTextureGrid extends Pane {
         double thumbY = y + CARD_PAD;
         Image thumb = t.getThumbnailImage();
         if (thumb != null && !thumb.isError()) {
-            // preserveRatio: ajustar al cuadrado THUMB_SIZE
+            // Ajustar al cuadrado THUMB_SIZE conservando el aspecto
             double iw = thumb.getWidth();
             double ih = thumb.getHeight();
             double scale = (iw <= 0 || ih <= 0) ? 1.0 : Math.min(THUMB_SIZE / iw, THUMB_SIZE / ih);
@@ -530,7 +507,7 @@ public class CanvasTextureGrid extends Pane {
         gc.setFont(FONT_INFO);
         gc.fillText(t.getResolutionText(), x + CARD_W / 2.0, thumbY + THUMB_SIZE + 4 + 14);
         
-        // "Botón" Reducir
+        // Botón Resize
         double btnX = x + CARD_PAD;
         double btnY = y + CARD_H - CARD_PAD - BUTTON_H;
         double btnW = CARD_W - 2 * CARD_PAD;
@@ -571,9 +548,7 @@ public class CanvasTextureGrid extends Pane {
         }
     }
     
-    /**
-     * Trunca un nombre largo agregando "..." al final.
-     */
+    /** Trunca con "..." si supera maxLen. */
     private static String truncate(String s, int maxLen) {
         if (s == null) return "";
         if (s.length() <= maxLen) return s;
@@ -582,10 +557,7 @@ public class CanvasTextureGrid extends Pane {
     
     // ==================== HIT TESTING ====================
     
-    /**
-     * Convierte coordenadas del Canvas (mouse event) en el índice del item bajo el cursor.
-     * Devuelve -1 si no hay item bajo esa posición.
-     */
+    /** @return Índice del item en esas coordenadas del Canvas, o -1 si no hay */
     private int indexAt(double canvasX, double canvasY) {
         if (cols <= 0 || displayList.isEmpty()) return -1;
         
@@ -598,7 +570,6 @@ public class CanvasTextureGrid extends Pane {
         double localY = absY - PADDING;
         if (localX < 0 || localY < 0) return -1;
         
-        // Rejilla incluyendo gaps
         double colStride = CARD_W + H_GAP;
         double rowStride = CARD_H + V_GAP;
         
@@ -616,10 +587,7 @@ public class CanvasTextureGrid extends Pane {
         return idx;
     }
     
-    /**
-     * Determina si un punto del Canvas cae sobre la zona del botón
-     * "Reducir" de la card en el índice idx.
-     */
+    /** @return true si el punto del Canvas cae en el botón Resize de la card idx */
     private boolean isInButtonZone(double canvasX, double canvasY, int idx) {
         if (idx < 0) return false;
         int row = idx / cols;
