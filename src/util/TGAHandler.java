@@ -58,7 +58,7 @@ public final class TGAHandler {
      * Constructor privado - clase utilitaria.
      */
     private TGAHandler() {
-        throw new UnsupportedOperationException("Clase utilitaria - no instanciar");
+        throw new UnsupportedOperationException("Utility class - do not instantiate");
     }
     
     // ==================== LECTURA DE TGA ====================
@@ -76,7 +76,7 @@ public final class TGAHandler {
             // Leer header
             byte[] header = new byte[TGA_HEADER_SIZE];
             if (fis.read(header) != TGA_HEADER_SIZE) {
-                throw new IOException("Header TGA incompleto");
+                throw new IOException("Incomplete TGA header");
             }
             
             // Parsear header

@@ -69,7 +69,7 @@ public class TextureInfo {
      */
     public TextureInfo(File baseFile, int width, int height) {
         if (baseFile == null) {
-            throw new IllegalArgumentException("El archivo base no puede ser null");
+            throw new IllegalArgumentException("Base file cannot be null");
         }
         
         this.baseFile = baseFile;

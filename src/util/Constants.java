@@ -162,6 +162,6 @@ public final class Constants {
      * Constructor privado para evitar instanciación.
      */
     private Constants() {
-        throw new UnsupportedOperationException("Clase de constantes - no instanciar");
+        throw new UnsupportedOperationException("Constants class - do not instantiate");
     }
 }

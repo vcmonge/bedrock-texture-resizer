@@ -45,7 +45,7 @@ import util.AlphaMode;
 public final class AreaResampler {
 
     private AreaResampler() {
-        throw new UnsupportedOperationException("Clase utilitaria - no instanciar");
+        throw new UnsupportedOperationException("Utility class - do not instantiate");
     }
 
     /**
@@ -129,13 +129,13 @@ public final class AreaResampler {
     private static BufferedImage resample(BufferedImage source, int dstWidth, int dstHeight,
             boolean premultiply, AlphaMode alphaMode) {
         if (source == null) {
-            throw new IllegalArgumentException("La imagen fuente no puede ser null");
+            throw new IllegalArgumentException("Source image cannot be null");
         }
         if (dstWidth < 1 || dstHeight < 1) {
-            throw new IllegalArgumentException("Las dimensiones destino deben ser >= 1");
+            throw new IllegalArgumentException("Target dimensions must be >= 1");
         }
         if (alphaMode == null) {
-            throw new IllegalArgumentException("El modo de alfa no puede ser null");
+            throw new IllegalArgumentException("Alpha mode cannot be null");
         }
 
         int srcWidth = source.getWidth();

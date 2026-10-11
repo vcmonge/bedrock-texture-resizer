@@ -144,23 +144,23 @@ public class TextureService {
             Consumer<String> progressCallback) throws IOException {
         
         if (directory == null || !directory.exists() || !directory.isDirectory()) {
-            reportProgress(progressCallback, "Directorio no válido: " + 
+            reportProgress(progressCallback, "Invalid directory: " + 
                     (directory != null ? directory.getAbsolutePath() : "null"));
             return new ArrayList<>();
         }
         
-        reportProgress(progressCallback, "Escaneando: " + directory.getAbsolutePath());
+        reportProgress(progressCallback, "Scanning: " + directory.getAbsolutePath());
         
         // Obtener todos los archivos de imagen
         List<File> allImageFiles = scanForImages(directory);
-        reportProgress(progressCallback, "Encontrados " + allImageFiles.size() + " archivos de imagen");
+        reportProgress(progressCallback, "Found " + allImageFiles.size() + " image files");
         
         // Crear mapa para búsqueda rápida de archivos asociados
         Map<String, File> fileMap = buildFileMap(allImageFiles);
         
         // Filtrar solo texturas base (sin sufijos asociados MER o normal)
         List<File> baseFiles = filterBaseTextures(allImageFiles);
-        reportProgress(progressCallback, "Texturas base: " + baseFiles.size());
+        reportProgress(progressCallback, "Base textures: " + baseFiles.size());
         
         // Cargar información de cada textura en paralelo
         return loadTextureInfoParallel(baseFiles, fileMap, progressCallback);
@@ -325,15 +325,15 @@ public class TextureService {
                 
                 if (completed % 50 == 0) {
                     reportProgress(progressCallback, 
-                            String.format("Cargadas %d/%d texturas", completed, baseFiles.size()));
+                            String.format("Loaded %d/%d textures", completed, baseFiles.size()));
                 }
             } catch (Exception e) {
                 // Continuar con las demás si una falla
-                System.err.println("Error cargando textura: " + e.getMessage());
+                System.err.println("Error loading texture: " + e.getMessage());
             }
         }
         
-        reportProgress(progressCallback, "Carga completada: " + result.size() + " texturas");
+        reportProgress(progressCallback, "Load complete: " + result.size() + " textures");
         return result;
     }
     
@@ -377,7 +377,7 @@ public class TextureService {
                 return info;
                 
             } catch (Exception e) {
-                System.err.println("Error procesando " + baseFile.getName() + ": " + e.getMessage());
+                System.err.println("Error processing " + baseFile.getName() + ": " + e.getMessage());
                 return null;
             }
         }
@@ -417,7 +417,7 @@ public class TextureService {
                 }
             }
         } catch (Exception e) {
-            System.err.println("Error leyendo dimensiones de " + file.getName() + ": " + e.getMessage());
+            System.err.println("Error reading dimensions of " + file.getName() + ": " + e.getMessage());
         }
         return null;
     }
@@ -507,7 +507,7 @@ public class TextureService {
             
             info.setThumbnailImage(thumbnail);
         } catch (Exception e) {
-            System.err.println("Error generando miniatura para " + 
+            System.err.println("Error generating thumbnail for " + 
                     info.getBaseFile().getName() + ": " + e.getMessage());
         }
     }

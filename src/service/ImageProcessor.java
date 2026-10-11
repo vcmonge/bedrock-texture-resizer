@@ -90,13 +90,13 @@ public class ImageProcessor {
     public ImageProcessor(int scaleFactor, ResizeAlgorithm algorithm, 
             boolean tgaIndependentAlpha, AlphaMode alphaMode) {
         if (scaleFactor < 1) {
-            throw new IllegalArgumentException("El factor de escala debe ser >= 1");
+            throw new IllegalArgumentException("Scale factor must be >= 1");
         }
         if (algorithm == null) {
-            throw new IllegalArgumentException("El algoritmo no puede ser null");
+            throw new IllegalArgumentException("Algorithm cannot be null");
         }
         if (alphaMode == null) {
-            throw new IllegalArgumentException("El modo de alfa no puede ser null");
+            throw new IllegalArgumentException("Alpha mode cannot be null");
         }
         this.scaleFactor = scaleFactor;
         this.algorithm = algorithm;
@@ -115,7 +115,7 @@ public class ImageProcessor {
      */
     public BufferedImage resize(BufferedImage original) {
         if (original == null) {
-            throw new IllegalArgumentException("La imagen no puede ser null");
+            throw new IllegalArgumentException("Image cannot be null");
         }
         
         int originalWidth = original.getWidth();
@@ -133,7 +133,7 @@ public class ImageProcessor {
                 return AreaResampler.resize(original, newWidth, newHeight, alphaMode);
             default:
                 throw new UnsupportedOperationException(
-                        "Algoritmo no implementado: " + algorithm);
+                        "Algorithm not implemented: " + algorithm);
         }
     }
     
@@ -181,7 +181,7 @@ public class ImageProcessor {
     
     private void processFile(File inputFile, File outputFile, boolean dataMap) throws IOException {
         if (!inputFile.exists()) {
-            throw new IOException("El archivo no existe: " + inputFile.getAbsolutePath());
+            throw new IOException("File does not exist: " + inputFile.getAbsolutePath());
         }
         
         String extension = getExtension(inputFile).toLowerCase();
@@ -194,7 +194,7 @@ public class ImageProcessor {
         }
         
         if (original == null) {
-            throw new IOException("No se pudo leer la imagen: " + inputFile.getAbsolutePath());
+            throw new IOException("Could not read image: " + inputFile.getAbsolutePath());
         }
         
         BufferedImage resized;
